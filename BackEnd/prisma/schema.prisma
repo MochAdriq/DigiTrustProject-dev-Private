@@ -1,0 +1,582 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("POSTGRES_PRISMA_URL") // uses connection pooling
+  directUrl = env("POSTGRES_URL_NON_POOLING") // uses a direct connection
+}
+
+///////////////////////////////////////////////////////////
+// ENUMS
+///////////////////////////////////////////////////////////
+
+enum AccountType {
+  SHARING
+  PRIVATE
+  VIP
+}
+
+enum AccountStatus {
+  AVAILABLE
+  EXPIRED
+  REPORTED
+}
+
+enum UserRole {
+  ADMIN
+  OPERATOR
+}
+
+enum ReportStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+  REJECTED
+}
+
+///////////////////////////////////////////////////////////
+// CORE MODELS
+///////////////////////////////////////////////////////////
+
+model User {
+  id          String     @id
+  username    String     @unique
+  fullName    String
+  password    String
+  role        UserRole
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  activities  ActivityLog[]
+  assignments CustomerAssignment[]
+  reports     ReportedAccount[]
+}
+
+model ActivityLog {
+  id        String   @id
+  action    String
+  platform  String?
+  target    String?
+  type      String
+  status    String
+  details   String?
+  userId    String?
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+model Counter {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  value     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+model CustomerAssignment {
+  id             String     @id
+  platformName   String
+  accountId      String
+  customerName   String
+  operatorId     String
+  note           String?
+  expiresAt      DateTime?
+  createdAt      DateTime   @default(now())
+
+  operator       User       @relation(fields: [operatorId], references: [id])
+}
+
+model ReportedAccount {
+  id             String        @id
+  platformName   String
+  accountId      String
+  accountEmail   String        // 🆕 Tambahan baru
+  reportedById   String
+  reason         String?
+  status         ReportStatus  @default(PENDING)
+  createdAt      DateTime      @default(now())
+  resolvedAt     DateTime?
+
+  reportedBy     User          @relation(fields: [reportedById], references: [id])
+}
+
+
+///////////////////////////////////////////////////////////
+// PLATFORM TABLE TEMPLATE
+///////////////////////////////////////////////////////////
+
+/// NOTE: Semua tabel di bawah ini memiliki struktur identik.
+/// Tabel utama = akun aktif yang dijual/digunakan customer.
+/// Tabel garansi = akun cadangan/manual input admin.
+
+///////////////////////////////////////////////////////////
+// NETFLIX
+///////////////////////////////////////////////////////////
+
+model Netflix {
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model WarrantyNetflix {
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+///////////////////////////////////////////////////////////
+// DISNEY
+///////////////////////////////////////////////////////////
+
+model Disney {
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model WarrantyDisney {
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+///////////////////////////////////////////////////////////
+// SPOTIFY
+///////////////////////////////////////////////////////////
+
+model SpotifyFamplan1Bulan {
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model WarrantySpotifyFamplan1Bulan {
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model SpotifyFamplan2Bulan {
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model WarrantySpotifyFamplan2Bulan {
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+///////////////////////////////////////////////////////////
+// CANVA
+///////////////////////////////////////////////////////////
+
+model Canva1Bulan {
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model WarrantyCanva1Bulan {
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Canva1Tahun {
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model WarrantyCanva1Tahun {
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+///////////////////////////////////////////////////////////
+// PLATFORM LAIN
+///////////////////////////////////////////////////////////
+
+model PrimeVideo {   
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  }
+
+model WarrantyPrimeVideo { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model Hbo { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model WarrantyHbo {
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model Viu1Bulan {   
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  }
+
+model WarrantyViu1Bulan { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model VidioDiamondMobile {   
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model WarrantyVidioDiamondMobile { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model VidioPlatinum { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model WarrantyVidioPlatinum { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model WeTv { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model WarrantyWeTv { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model Loklok { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model WarrantyLoklok { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model Capcut { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model WarrantyCapcut { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model ChatGpt { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model WarrantyChatGpt { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model Youtube1Bulan { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
+
+model WarrantyYoutube1Bulan { 
+  id          String        @id
+  email       String
+  password    String
+  profile     Json?
+  type        AccountType
+  status      AccountStatus @default(AVAILABLE)
+  startAt     DateTime      @default(now())
+  expiresAt   DateTime?
+  reported    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+ }
