@@ -22,3 +22,5 @@ cd ..
 
 echo "Deployment package created: deployment.zip"
 echo "Upload this file to your hosting service and run 'npm install --production' followed by 'npm start'"
+
+# triggermental
