@@ -212,7 +212,7 @@ export default function RequestAccount() {
                 <SelectContent>
                   <SelectItem value="private">Private Account</SelectItem>
                   <SelectItem value="sharing">Sharing Account</SelectItem>
-                  <SelectItem value="vvip">VVIP Account</SelectItem>
+                  <SelectItem value="vip">vip Account</SelectItem>
                 </SelectContent>
               </Select>
             </div>

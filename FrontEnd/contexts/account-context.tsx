@@ -25,7 +25,7 @@ interface AccountContextType {
   reportedAccounts: ReportedAccount[];
   customerAssignments: CustomerAssignment[];
   operatorActivities: OperatorActivity[];
-  // Pastikan tipe di sini menggunakan AccountType yang sudah mencakup vvip
+  // Pastikan tipe di sini menggunakan AccountType yang sudah mencakup vip
   addAccount: (
     account: Omit<Account, "id" | "createdAt" | "expiresAt">
   ) => Promise<void>;
@@ -111,18 +111,18 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [operatorActivities, setOperatorActivities] = useState<
     OperatorActivity[]
   >([]);
-  // Tambahkan vvip di state
+  // Tambahkan vip di state
   const [availableProfileCounts, setAvailableProfileCounts] = useState<{
     private: number;
     sharing: number;
-    vvip: number; // <-- Tambahkan ini
-  }>({ private: 0, sharing: 0, vvip: 0 }); // <-- Inisialisasi
+    vip: number; // <-- Tambahkan ini
+  }>({ private: 0, sharing: 0, vip: 0 }); // <-- Inisialisasi
 
   // Definisikan refreshData sebelum saveAllData
   const refreshData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Ambil juga hitungan vvip
+      // Ambil juga hitungan vip
       const [
         accountsData,
         garansiAccountsData,
@@ -131,7 +131,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         operatorActivitiesData,
         privateCount,
         sharingCount,
-        vvipCount, // <-- Ambil ini
+        vipCount, // <-- Ambil ini
       ] = await Promise.all([
         DatabaseService.getAllAccounts(),
         DatabaseService.getAllGaransiAccounts(),
@@ -140,7 +140,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         DatabaseService.getAllOperatorActivities(),
         DatabaseService.getAvailableProfileCount("private"),
         DatabaseService.getAvailableProfileCount("sharing"),
-        DatabaseService.getAvailableProfileCount("vvip"), // <-- Panggil ini
+        DatabaseService.getAvailableProfileCount("vip"), // <-- Panggil ini
       ]);
 
       setAccounts(accountsData);
@@ -148,11 +148,11 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       setReportedAccounts(reportedAccountsData);
       setCustomerAssignments(customerAssignmentsData);
       setOperatorActivities(operatorActivitiesData);
-      // Set state vvip
+      // Set state vip
       setAvailableProfileCounts({
         private: privateCount,
         sharing: sharingCount,
-        vvip: vvipCount,
+        vip: vipCount,
       }); // <-- Set ini
     } catch (error) {
       console.error("❌ Error loading data:", error);

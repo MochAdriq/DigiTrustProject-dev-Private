@@ -47,7 +47,7 @@ export default function BulkImport() {
     // Pastikan tipe parameter: AccountType
     if (type === "private") return 8;
     if (type === "sharing") return 20;
-    if (type === "vvip") return 5; // <-- Tambahkan case VVIP
+    if (type === "vip") return 5; // <-- Tambahkan case vip
     return 8;
   };
 
@@ -55,7 +55,7 @@ export default function BulkImport() {
     // Pastikan tipe parameter: AccountType
     if (type === "private") return 8;
     if (type === "sharing") return 20;
-    if (type === "vvip") return 5; // <-- Tambahkan case VVIP
+    if (type === "vip") return 5; // <-- Tambahkan case vip
     return 8;
   };
 
@@ -398,14 +398,14 @@ export default function BulkImport() {
                 </Label>
               </div>
               <div className="flex items-center space-x-3">
-                <RadioGroupItem value="vvip" id="vvip" className="w-5 h-5" />
-                <Label htmlFor="vvip" className="text-base">
-                  VVIP (
+                <RadioGroupItem value="vip" id="vip" className="w-5 h-5" />
+                <Label htmlFor="vip" className="text-base">
+                  vip (
                   {warrantyMode
-                    ? `${getDefaultProfileCount("vvip")} profiles`
+                    ? `${getDefaultProfileCount("vip")} profiles`
                     : customProfileMode
                     ? `Custom: ${profileCount}`
-                    : `${getDefaultProfileCount("vvip")}`}{" "}
+                    : `${getDefaultProfileCount("vip")}`}{" "}
                   profiles)
                 </Label>
               </div>

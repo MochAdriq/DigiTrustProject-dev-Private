@@ -1,6 +1,6 @@
 // // import { prisma } from "./prisma";
 // import type { Profile } from "./database.types";
-// export type AccountType = "private" | "sharing" | "vvip";
+// export type AccountType = "private" | "sharing" | "vip";
 
 // export interface Account {
 //   id: string;
@@ -691,7 +691,7 @@
 // import { prisma } from "./prisma"; // Komentari atau hapus impor prisma
 
 // Definisikan tipe dan interface yang dibutuhkan (atau impor jika sudah ada di tempat lain)
-export type AccountType = "private" | "sharing" | "vvip";
+export type AccountType = "private" | "sharing" | "vip";
 
 export interface Profile {
   profile: string;
@@ -716,7 +716,7 @@ export interface GaransiAccount {
   id: string;
   email: string;
   password: string;
-  type: AccountType; // Bisa private/sharing/vvip juga jika perlu
+  type: AccountType; // Bisa private/sharing/vip juga jika perlu
   profiles: Profile[];
   createdAt: Date;
   expiresAt: Date;
@@ -763,7 +763,7 @@ const generateProfiles = (
   type: AccountType,
   customCount?: number
 ): Profile[] => {
-  const defaultCounts = { private: 8, sharing: 20, vvip: 5 };
+  const defaultCounts = { private: 8, sharing: 20, vip: 5 };
   const count = customCount || defaultCounts[type] || 8;
   const profiles: Profile[] = [];
   const profilePatterns = Array.from({ length: 20 }, (_, i) => ({
@@ -814,11 +814,11 @@ let mockAccounts: Account[] = [
     reportReason: null,
   },
   {
-    id: "mock-vvip-1",
-    email: "mock.vvip1@example.com",
+    id: "mock-vip-1",
+    email: "mock.vip1@example.com",
     password: "password",
-    type: "vvip",
-    profiles: generateProfiles("vvip").map((p, i) => ({ ...p, used: i < 1 })),
+    type: "vip",
+    profiles: generateProfiles("vip").map((p, i) => ({ ...p, used: i < 1 })),
     createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
     expiresAt: calculateExpirationDate(
       new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
@@ -861,8 +861,8 @@ let mockGaransiAccounts: GaransiAccount[] = [
 let mockReportedAccounts: ReportedAccount[] = [
   {
     id: "rep-1",
-    accountId: "mock-vvip-1",
-    email: "mock.vvip1@example.com",
+    accountId: "mock-vip-1",
+    email: "mock.vip1@example.com",
     reportReason: "Password salah",
     reportedAt: new Date(Date.now() - 60 * 60 * 1000),
     resolved: false,
@@ -913,8 +913,8 @@ let mockOperatorActivities: OperatorActivity[] = [
     id: "act-3",
     operatorName: "Admin",
     action: "Add Account",
-    accountEmail: "mock.vvip1@example.com",
-    accountType: "vvip",
+    accountEmail: "mock.vip1@example.com",
+    accountType: "vip",
     date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
   },
 ];
@@ -1227,7 +1227,7 @@ export class DatabaseService {
     totalAssignments: number;
     privateAccounts: number;
     sharingAccounts: number;
-    vvipAccounts: number;
+    vipAccounts: number;
   }> {
     console.log("⚠️ MOCK DATA: getCustomerStatistics()");
     await this._simulateDelay();
@@ -1240,15 +1240,15 @@ export class DatabaseService {
     const sharingCount = mockCustomerAssignments.filter(
       (a) => a.accountType === "sharing"
     ).length;
-    const vvipCount = mockCustomerAssignments.filter(
-      (a) => a.accountType === "vvip"
-    ).length; // Hitung VVIP
+    const vipCount = mockCustomerAssignments.filter(
+      (a) => a.accountType === "vip"
+    ).length; // Hitung vip
     return Promise.resolve({
       totalCustomers: uniqueCustomers.size,
       totalAssignments: mockCustomerAssignments.length,
       privateAccounts: privateCount,
       sharingAccounts: sharingCount,
-      vvipAccounts: vvipCount, // Kembalikan VVIP
+      vipAccounts: vipCount, // Kembalikan vip
     });
   }
 
@@ -1257,7 +1257,7 @@ export class DatabaseService {
       total: number;
       private: number;
       sharing: number;
-      vvip: number;
+      vip: number;
       byDate: { [date: string]: number };
     };
   }> {
@@ -1268,7 +1268,7 @@ export class DatabaseService {
         total: number;
         private: number;
         sharing: number;
-        vvip: number;
+        vip: number;
         byDate: { [date: string]: number };
       };
     } = {};
@@ -1280,14 +1280,14 @@ export class DatabaseService {
           total: 0,
           private: 0,
           sharing: 0,
-          vvip: 0,
+          vip: 0,
           byDate: {},
         };
       }
       stats[opName].total++;
       if (activity.accountType === "private") stats[opName].private++;
       else if (activity.accountType === "sharing") stats[opName].sharing++;
-      else if (activity.accountType === "vvip") stats[opName].vvip++;
+      else if (activity.accountType === "vip") stats[opName].vip++;
 
       const dateStr = activity.date.toLocaleDateString("id-ID");
       stats[opName].byDate[dateStr] = (stats[opName].byDate[dateStr] || 0) + 1;

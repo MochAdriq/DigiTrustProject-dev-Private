@@ -15,7 +15,6 @@ import BulkImport from "@/components/bulk-import";
 import ReportedAccounts from "@/components/reported-accounts";
 import CustomerStatistics from "@/components/customer-statistics";
 import UserManagement from "@/components/user-management";
-import Garansi from "@/components/garansi";
 import ActivityLogs from "@/components/activity-logs";
 import OfflineBackup from "@/components/offline-backup";
 import NotificationSystem from "@/components/notification-system";
@@ -44,6 +43,7 @@ import {
 import AccountSearch from "@/components/account-search";
 import { useAccounts, AccountType } from "@/contexts/account-context";
 import LoadingSpinner from "./loading-spinner";
+import Link from "next/link";
 
 export default function DashboardTabs() {
   const { isLoading, refreshData } = useAccounts();
@@ -112,10 +112,10 @@ export default function DashboardTabs() {
                     Sharing
                   </TabsTrigger>
                   <TabsTrigger
-                    value="vvip"
+                    value="vip"
                     className="px-6 rounded-md data-[state=active]:bg-yellow-500 data-[state=active]:text-white"
                   >
-                    <Star className="w-4 h-4 mr-2" /> VVIP
+                    <Star className="w-4 h-4 mr-2" /> vip
                   </TabsTrigger>
                 </TabsList>
               )}
@@ -123,18 +123,21 @@ export default function DashboardTabs() {
                 <Dialog open={isGaransiOpen} onOpenChange={setIsGaransiOpen}>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <DialogTrigger asChild>
+                      {/* Ganti DialogTrigger menjadi Link */}
+                      <Link href="/dashboard/garansi" passHref>
                         <Button
                           variant="outline"
                           size="icon"
                           className="text-blue-600 border-blue-300 hover:bg-blue-600 hover:text-white"
+                          // Hapus onClick jika ada
                         >
                           <Shield className="h-4 w-4" />
                         </Button>
-                      </DialogTrigger>
+                      </Link>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Cek Garansi Akun</p>
+                      <p>Cek Garansi Akun (Halaman Baru)</p>{" "}
+                      {/* Update tooltip */}
                     </TooltipContent>
                   </Tooltip>
                   <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
@@ -424,9 +427,9 @@ export default function DashboardTabs() {
             <TabsContent value="sharing">
               <AccountList type="sharing" />
             </TabsContent>
-            <TabsContent value="vvip">
-              {/* Placeholder untuk VVIP, kita akan fungsikan AccountList di sini nanti */}
-              <AccountList type="vvip" />
+            <TabsContent value="vip">
+              {/* Placeholder untuk vip, kita akan fungsikan AccountList di sini nanti */}
+              <AccountList type="vip" />
             </TabsContent>
           </div>
         )}

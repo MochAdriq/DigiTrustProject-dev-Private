@@ -37,7 +37,7 @@ export default function AccountForm({ type, onSuccess }: AccountFormProps) {
         { profile: "Profile H", pin: "8888" },
       ];
 
-      const defaultCounts = { private: 8, sharing: 20, vvip: 5 };
+      const defaultCounts = { private: 8, sharing: 20, vip: 5 };
       const count = defaultCounts[type] || 8;
       const profiles = [];
 
