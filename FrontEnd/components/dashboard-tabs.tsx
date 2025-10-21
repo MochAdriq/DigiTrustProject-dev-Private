@@ -120,33 +120,40 @@ export default function DashboardTabs() {
                 </TabsList>
               )}
               <div className="flex items-center space-x-2">
-                <Dialog open={isGaransiOpen} onOpenChange={setIsGaransiOpen}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      {/* Ganti DialogTrigger menjadi Link */}
-                      <Link href="/dashboard/garansi" passHref>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="text-blue-600 border-blue-300 hover:bg-blue-600 hover:text-white"
-                          // Hapus onClick jika ada
-                        >
-                          <Shield className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Cek Garansi Akun (Halaman Baru)</p>{" "}
-                      {/* Update tooltip */}
-                    </TooltipContent>
-                  </Tooltip>
-                  <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Fitur Garansi</DialogTitle>
-                    </DialogHeader>
-                    <Garansi userRole={currentUser?.role || "operator"} />
-                  </DialogContent>
-                </Dialog>
+                <TooltipProvider>
+                  <div className="flex items-center space-x-2">
+                    {" "}
+                    {/* Pastikan Link ada di dalam div ini */}
+                    <Dialog
+                      open={isGaransiOpen}
+                      onOpenChange={setIsGaransiOpen}
+                    >
+                      {" "}
+                      {/* HAPUS DIALOG INI */}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          {/* INI SEKARANG HARUSNYA SUDAH <Link> */}
+                          <Link href="/dashboard/garansi" passHref>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="text-blue-600 border-blue-300 hover:bg-blue-600 hover:text-white"
+                            >
+                              <Shield className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Cek Garansi Akun (Halaman Baru)</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </Dialog>{" "}
+                    <Dialog
+                      open={isBackupOpen}
+                      onOpenChange={setIsBackupOpen}
+                    ></Dialog>
+                  </div>
+                </TooltipProvider>
                 <Dialog>
                   <Tooltip>
                     <TooltipTrigger asChild>
