@@ -1,52 +1,89 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// This is your Prisma schema file
+// Learn more at https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("POSTGRES_PRISMA_URL") // uses connection pooling
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")      // uses connection pooling
   directUrl = env("POSTGRES_URL_NON_POOLING") // uses a direct connection
 }
 
+// ==========================
+// ENUM DEFINITIONS
+// ==========================
+
+// Tipe akun
+enum AccountType {
+  sharing
+  private
+  vip
+}
+
+// Daftar platform tetap (16 item)
+enum PlatformType {
+  VIDIO_DIAMOND_MOBILE
+  VIU_1_BULAN
+  WE_TV
+  YT_1_BULAN
+  HBO
+  LOKLOK
+  PRIMEVIDEO
+  SPOTIFY_FAMPLAN_1_BULAN
+  SPOTIFY_FAMPLAN_2_BULAN
+  VIDIO_PLATINUM
+  CANVA_1_BULAN
+  CANVA_1_TAHUN
+  CHAT_GPT
+  DISNEY
+  NETFLIX
+}
+
+// ==========================
+// MODEL DEFINITIONS
+// ==========================
+
+// 🔹 Akun utama
 model Account {
-  id            String   @id @default(cuid())
-  email         String   @unique
+  id            String       @id @default(uuid())
+  email         String       @unique
   password      String
-  type          String   // "private" or "sharing"
-  profiles      Json     // Array of Profile objects
-  createdAt     DateTime @default(now()) @map("created_at")
-  expiresAt     DateTime @map("expires_at")
-  reported      Boolean  @default(false)
-  reportReason  String?  @map("report_reason")
-  isGaransiOnly Boolean  @default(false) @map("is_garansi_only")
+  type          AccountType
+  platform      PlatformType @map("platform")
+  profiles      Json
+  createdAt     DateTime     @default(now()) @map("created_at")
+  expiresAt     DateTime     @map("expires_at")
+  reported      Boolean      @default(false)
 
   // Relations
-  reportedAccounts ReportedAccount[]
+  reportedAccounts    ReportedAccount[]
   customerAssignments CustomerAssignment[]
 
   @@map("accounts")
 }
 
+// 🔹 Akun Garansi (berdiri sendiri)
 model GaransiAccount {
-  id           String   @id @default(cuid())
+  id           String       @id @default(uuid())
   email        String
   password     String
-  type         String   // "private" or "sharing"
-  profiles     Json     // Array of Profile objects
-  createdAt    DateTime @default(now()) @map("created_at")
-  expiresAt    DateTime @map("expires_at")
-  warrantyDate DateTime @map("warranty_date")
+  type         AccountType
+  platform     PlatformType @map("platform")
+  profiles     Json
+  createdAt    DateTime     @default(now()) @map("created_at")
+  expiresAt    DateTime     @map("expires_at")
+  warrantyDate DateTime     @map("warranty_date")
+  isActive     Boolean      @default(true) @map("is_active")
 
   @@map("garansi_accounts")
 }
 
+// 🔹 Pelaporan akun
 model ReportedAccount {
-  id           String   @id @default(cuid())
+  id           String   @id @default(uuid())
   accountId    String   @map("account_id")
-  email        String
   reportReason String   @map("report_reason")
   reportedAt   DateTime @default(now()) @map("reported_at")
   resolved     Boolean  @default(false)
@@ -57,15 +94,16 @@ model ReportedAccount {
   @@map("reported_accounts")
 }
 
+// 🔹 Penugasan akun ke customer
 model CustomerAssignment {
-  id                 String   @id @default(cuid())
-  customerIdentifier String   @map("customer_identifier")
-  accountId          String   @map("account_id")
-  accountEmail       String   @map("account_email")
-  accountType        String   @map("account_type")
-  profileName        String   @map("profile_name")
-  operatorName       String?  @map("operator_name")
-  assignedAt         DateTime @default(now()) @map("assigned_at")
+  id                 String       @id @default(uuid())
+  customerIdentifier String       @map("customer_identifier")
+  accountId          String       @map("account_id")
+  accountEmail       String       @map("account_email")
+  accountType        AccountType  @map("account_type")
+  profileName        String       @map("profile_name")
+  operatorName       String?      @map("operator_name")
+  assignedAt         DateTime     @default(now()) @map("assigned_at")
 
   // Relations
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
@@ -73,24 +111,26 @@ model CustomerAssignment {
   @@map("customer_assignments")
 }
 
+// 🔹 Aktivitas operator
 model OperatorActivity {
-  id           String   @id @default(cuid())
-  operatorName String   @map("operator_name")
+  id           String       @id @default(uuid())
+  operatorName String       @map("operator_name")
   action       String
-  accountEmail String   @map("account_email")
-  accountType  String   @map("account_type")
-  date         DateTime @default(now())
+  accountEmail String       @map("account_email")
+  accountType  AccountType  @map("account_type")
+  date         DateTime     @default(now())
 
   @@map("operator_activities")
 }
 
+// 🔹 User internal sistem (admin / operator)
 model User {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid())
   username  String   @unique
   password  String
   role      String   @default("operator") // "admin" or "operator"
   createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("users")
 }

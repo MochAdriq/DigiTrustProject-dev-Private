@@ -1,34 +1,88 @@
-import { type ClassValue, clsx } from "clsx"
-import { twMerge } from "tailwind-merge"
+// lib/utils.ts
+import { type ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+import type { AccountType } from "@prisma/client";
 
+/**
+ * ✅ Merge Tailwind CSS classes safely
+ */
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+  return twMerge(clsx(inputs));
 }
 
-export function generateRandomProfiles(type: "private" | "sharing") {
-  const count = type === "private" ? 8 : 20
-  const profiles = []
-  const profileNames = ["A", "B", "C", "D", "E", "F", "G", "H"]
+/**
+ * ✅ Generate profiles and PINs based on account type.
+ * - sharing: 20 profiles
+ * - private: 8 profiles
+ * - vip: 6 profiles
+ *
+ * @param type AccountType
+ */
+export function generateProfiles(type: AccountType) {
+  const profileCounts: Record<AccountType, number> = {
+    sharing: 20,
+    private: 8,
+    vip: 6,
+  };
 
-  for (let i = 0; i < count; i++) {
-    const profileIndex = i % 8
-    const pin = String((profileIndex + 1) * 1111).padStart(4, "0")
+  const pins = [
+    "1111",
+    "2222",
+    "3333",
+    "4444",
+    "5555",
+    "6666",
+    "7777",
+    "8888",
+    "9999",
+    "0000",
+  ];
 
-    profiles.push({
-      profile: `Profile ${profileNames[profileIndex]}`,
-      pin,
-    })
-  }
+  const count = profileCounts[type];
+  const profiles = Array.from({ length: count }).map((_, i) => ({
+    profile: `Profile ${String.fromCharCode(65 + i)}`, // A, B, C, D...
+    pin: pins[i % pins.length],
+    used: false,
+  }));
 
-  // Shuffle the array to randomize the order
-  return profiles.sort(() => Math.random() - 0.5)
+  // Optional randomization
+  return [...profiles].sort(() => Math.random() - 0.5);
 }
 
-export function formatDate(dateString: string): string {
-  const date = new Date(dateString)
-  return new Intl.DateTimeFormat("en-US", {
+/**
+ * ✅ Format a date into a readable string.
+ * Example: 23 Okt 2025 (for id-ID)
+ */
+export function formatDate(dateString: string, locale = "id-ID"): string {
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
-  }).format(date)
+  }).format(date);
+}
+
+/**
+ * ✅ Calculate expiration date (+23 days default)
+ *
+ * @param createdAt - The date account was created
+ * @param customDays - Optional custom duration
+ * @returns Date
+ */
+export function calculateExpirationDate(
+  createdAt: Date | string,
+  customDays?: number
+): Date {
+  const date = new Date(createdAt);
+  if (isNaN(date.getTime())) throw new Error("Invalid createdAt date");
+  date.setDate(date.getDate() + (customDays ?? 23));
+  return date;
+}
+
+/**
+ * ✅ Simple UUID-like generator for client-side temp IDs.
+ */
+export function generateId(prefix = "id"): string {
+  return `${prefix}_${Math.random().toString(36).slice(2, 9)}${Date.now()}`;
 }

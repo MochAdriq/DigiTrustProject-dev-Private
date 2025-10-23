@@ -1,107 +1,129 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+// lib/database.types.ts
 
+// ============================================================
+// 🔹 JSON Type Helper
+// ============================================================
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
+// ============================================================
+// 🔹 Profile Schema
+// ============================================================
+export interface Profile {
+  profile: string;
+  pin: string;
+  used: boolean;
+}
+
+// ============================================================
+// 🔹 AccountType Enum (sinkron dengan Prisma)
+// ============================================================
+export type AccountType = "sharing" | "private" | "vip";
+
+// ============================================================
+// 🔹 Account Schema
+// ============================================================
+export interface Account {
+  id: string;
+  email: string;
+  password: string; // plaintext sesuai permintaan
+  type: AccountType;
+  profiles: Profile[];
+  createdAt: string;
+  expiresAt: string | null;
+  reported: boolean;
+  reportReason?: string | null;
+}
+
+// ============================================================
+// 🔹 Garansi Account Schema
+// ============================================================
+export interface GaransiAccount {
+  id: string;
+  email: string;
+  password: string;
+  type: AccountType;
+  profiles: Profile[];
+  createdAt: string;
+  expiresAt: string | null;
+  warrantyDate: string;
+  isActive: boolean;
+}
+
+// ============================================================
+// 🔹 Reported Account Schema
+// ============================================================
+export interface ReportedAccount {
+  id: string;
+  accountId: string;
+  email: string;
+  reportReason: string;
+  reportedAt: string;
+  resolved: boolean;
+}
+
+// ============================================================
+// 🔹 Customer Assignment Schema
+// ============================================================
+export interface CustomerAssignment {
+  id: string;
+  customerIdentifier: string;
+  accountId: string;
+  accountEmail: string;
+  accountType: AccountType;
+  profileName: string;
+  operatorName?: string | null;
+  assignedAt: string;
+}
+
+// ============================================================
+// 🔹 Operator Activity Schema
+// ============================================================
+export interface OperatorActivity {
+  id: string;
+  operatorName: string;
+  action: string;
+  accountEmail: string;
+  accountType: AccountType;
+  date: string;
+}
+
+// ============================================================
+// 🔹 Root Database Type (Supabase Compatibility)
+// ============================================================
 export interface Database {
   public: {
     Tables: {
       accounts: {
-        Row: {
-          id: string
-          email: string
-          password: string
-          type: "private" | "sharing"
-          profiles: Profile[]
-          created_at: string
-          expires_at: string
-          reported: boolean | null
-          report_reason: string | null
-        }
-        Insert: {
-          id: string
-          email: string
-          password: string
-          type: "private" | "sharing"
-          profiles: Profile[]
-          created_at?: string
-          expires_at: string
-          reported?: boolean | null
-          report_reason?: string | null
-        }
-        Update: {
-          id?: string
-          email?: string
-          password?: string
-          type?: "private" | "sharing"
-          profiles?: Profile[]
-          created_at?: string
-          expires_at?: string
-          reported?: boolean | null
-          report_reason?: string | null
-        }
-      }
+        Row: Account;
+        Insert: Omit<Account, "id" | "createdAt">;
+        Update: Partial<Account>;
+      };
+      garansi_accounts: {
+        Row: GaransiAccount;
+        Insert: Omit<GaransiAccount, "id" | "createdAt">;
+        Update: Partial<GaransiAccount>;
+      };
       reported_accounts: {
-        Row: {
-          id: string
-          account_id: string
-          email: string
-          report_reason: string
-          reported_at: string
-          resolved: boolean | null
-        }
-        Insert: {
-          id: string
-          account_id: string
-          email: string
-          report_reason: string
-          reported_at?: string
-          resolved?: boolean | null
-        }
-        Update: {
-          id?: string
-          account_id?: string
-          email?: string
-          report_reason?: string
-          reported_at?: string
-          resolved?: boolean | null
-        }
-      }
+        Row: ReportedAccount;
+        Insert: Omit<ReportedAccount, "id" | "reportedAt">;
+        Update: Partial<ReportedAccount>;
+      };
       customer_assignments: {
-        Row: {
-          id: string
-          customer_identifier: string
-          account_id: string
-          account_email: string
-          account_type: string
-          profile_name: string
-          operator_name: string | null // Added operator_name field
-          assigned_at: string
-        }
-        Insert: {
-          id: string
-          customer_identifier: string
-          account_id: string
-          account_email: string
-          account_type: string
-          profile_name: string
-          operator_name?: string | null // Added operator_name field
-          assigned_at?: string
-        }
-        Update: {
-          id?: string
-          customer_identifier?: string
-          account_id?: string
-          account_email?: string
-          account_type?: string
-          profile_name?: string
-          operator_name?: string | null // Added operator_name field
-          assigned_at?: string
-        }
-      }
-    }
-  }
-}
-
-export interface Profile {
-  profile: string
-  pin: string
-  used: boolean
+        Row: CustomerAssignment;
+        Insert: Omit<CustomerAssignment, "id" | "assignedAt">;
+        Update: Partial<CustomerAssignment>;
+      };
+      operator_activities: {
+        Row: OperatorActivity;
+        Insert: Omit<OperatorActivity, "id" | "date">;
+        Update: Partial<OperatorActivity>;
+      };
+    };
+  };
 }

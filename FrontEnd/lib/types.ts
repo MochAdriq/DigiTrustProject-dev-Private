@@ -1,77 +1,66 @@
-// Di dalam file: lib/types.ts
+// lib/types.ts
 
+// ===========================
+// 🔹 Account Types
+// ===========================
 export type AccountType = "private" | "sharing" | "vip";
-
-export interface Profile {
-  profile: string;
-  pin: string;
-  used: boolean;
-}
 
 export interface Account {
   id: string;
   email: string;
   password: string;
   type: AccountType;
-  platform: string; // <-- TAMBAHKAN INI
   profiles: Profile[];
-  createdAt: Date;
-  expiresAt: Date;
+  createdAt: string;
+  expiresAt: string | null;
   reported?: boolean;
   reportReason?: string | null;
   isGaransiOnly?: boolean;
+  platformId?: string | null;
 }
 
-export interface GaransiAccount {
-  id: string;
-  email: string;
-  password: string;
-  type: AccountType;
-  platform: string; // <-- TAMBAHKAN INI
-  profiles: Profile[];
-  createdAt: Date;
-  expiresAt: Date;
-  warrantyDate: Date;
+// ===========================
+// 🔹 Profile
+// ===========================
+export interface Profile {
+  profile: string;
+  pin: string;
+  used?: boolean;
 }
 
-export interface ReportedAccount {
-  id: string;
-  accountId: string;
-  platform: string; // <-- TAMBAHKAN INI (opsional, tapi bagus untuk filtering laporan)
-  email: string;
-  reportReason: string;
-  reportedAt: Date;
-  resolved: boolean;
-}
-
-export interface CustomerAssignment {
-  id: string;
-  customerIdentifier: string;
-  accountId: string;
-  platform: string; // <-- TAMBAHKAN INI
-  accountEmail: string;
-  accountType: AccountType;
-  profileName: string;
-  operatorName?: string | null;
-  assignedAt: Date;
-}
-
-export interface OperatorActivity {
-  id: string;
-  operatorName: string;
-  action: string;
-  platform: string; // <-- TAMBAHKAN INI
-  accountEmail: string;
-  accountType: AccountType;
-  date: Date;
-}
-
-// Interface User tidak perlu platform
-export interface User {
+// ===========================
+// 🔹 Administrator & Operator
+// ===========================
+export interface UserBase {
   id: string;
   username: string;
   password: string;
   name: string;
-  role: "admin" | "operator";
+  createdAt: string;
+  role: "admin" | "operator" | "superadmin";
+}
+
+export type Administrator = Omit<UserBase, "role"> & {
+  role: "admin" | "superadmin";
+};
+
+export type Operator = Omit<UserBase, "role"> & {
+  role: "operator";
+};
+
+// ===========================
+// 🔹 Garansi Account
+// ===========================
+export interface GaransiAccount extends Account {
+  warrantyDate: string;
+}
+
+// ===========================
+// 🔹 Platform
+// ===========================
+export interface Platform {
+  id: string;
+  name: string;
+  description?: string | null;
   createdAt: string;
 }

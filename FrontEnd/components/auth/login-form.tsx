@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,7 +10,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle, Eye, EyeOff, Sparkles, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Image from "next/image";
-import { validateUser } from "@/lib/auth";
+// ❌ HAPUS IMPORT INI, KARENA KITA TIDAK BISA MEMANGGILNYA DARI CLIENT
+// import { validateUser } from "@/lib/auth";
 
 export default function LoginForm() {
   const [username, setUsername] = useState("");
@@ -21,35 +21,45 @@ export default function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
+  // ✅ FUNGSI INI KITA UBAH TOTAL
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // 1. Panggil API Route /api/login menggunakan fetch
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: username.trim(),
+          password: password.trim(),
+        }),
+      });
 
-      const user = validateUser(username, password);
+      // 2. Ambil data JSON dari respons
+      const data = await response.json();
 
-      if (user) {
-        const userSession = {
-          id: user.id,
-          username: user.username,
-          name: user.name,
-          role: user.role,
-          loginTime: new Date().toISOString(),
-        };
+      // 3. Cek jika respons-nya sukses (status code 200-299)
+      if (response.ok) {
+        // `data` adalah objek ClientUser yang dikirim dari server
+        // 4. ✅ Simpan data user ke localStorage DI SINI (Client-side)
+        localStorage.setItem("currentUser", JSON.stringify(data));
 
-        localStorage.setItem("currentUser", JSON.stringify(userSession));
         setError("");
         router.push("/dashboard");
       } else {
+        // 5. Jika gagal (status 401, 500, dll), tampilkan error dari server
         setError(
-          "Username atau password salah. Silakan periksa kembali kredensial Anda."
+          data.error ||
+            "Username atau password salah. Silakan periksa kembali kredensial Anda."
         );
       }
     } catch (err) {
-      console.error("Login error:", err);
+      console.error("Login fetch error:", err);
       setError("Terjadi kesalahan saat login. Silakan coba lagi.");
     } finally {
       setIsLoading(false);
