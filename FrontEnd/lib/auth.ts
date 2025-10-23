@@ -1,19 +1,10 @@
-// Sistem autentikasi sederhana
-export interface User {
-  id: string;
-  username: string;
-  password: string;
-  name: string;
-  role: "admin" | "operator";
-  createdAt: string;
-}
+import type { User } from "./types";
 
-// Update the users array with the correct credentials that match the login form
 const users: User[] = [
   {
     id: "1",
     username: "admin",
-    password: "TrustDigital2024!", // Match the password shown in the image
+    password: "TrustDigital2024!",
     name: "Administrator",
     role: "admin",
     createdAt: new Date().toISOString(),
@@ -28,7 +19,6 @@ const users: User[] = [
   },
 ];
 
-// Add more detailed logging and validation
 export function validateUser(username: string, password: string): User | null {
   console.log("=== LOGIN VALIDATION ===");
   console.log("Input username:", username);
@@ -94,8 +84,6 @@ export function deleteUser(username: string): boolean {
   }
   return false;
 }
-
-// Tambahkan kode ini di bagian bawah file lib/auth.ts
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";

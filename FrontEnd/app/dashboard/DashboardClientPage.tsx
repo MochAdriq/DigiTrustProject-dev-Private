@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DashboardHeader } from "@/components/dashboard-header";
-import DashboardTabs from "@/components/dashboard-tabs";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import DashboardTabs from "@/components/dashboard/dashboard-tabs";
 import { AccountProvider } from "@/contexts/account-context";
-import LoadingSpinner from "@/components/loading-spinner";
+import LoadingSpinner from "@/components/shared/loading-spinner";
 
 export default function DashboardClientPage() {
   const router = useRouter();

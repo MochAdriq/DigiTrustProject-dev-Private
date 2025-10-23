@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { AccountProvider, useAccounts } from "@/contexts/account-context"; // Bungkus dengan Provider
-import { GaransiHeader } from "@/components/garansi-header"; // Header baru
-import LoadingSpinner from "@/components/loading-spinner";
+import { GaransiHeader } from "@/components/garansi/garansi-header"; // Header baru
+import LoadingSpinner from "@/components/shared/loading-spinner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 // Import komponen form yang akan dibuat
-import GaransiForm from "@/components/garansi-form"; // Nanti di-uncomment
+import GaransiForm from "@/components/garansi/garansi-form"; // Nanti di-uncomment
 
 // Komponen Inti (dipindahkan dari garansi.tsx)
 function GaransiView() {

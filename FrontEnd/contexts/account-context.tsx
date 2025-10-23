@@ -496,3 +496,5 @@ export function useAccounts() {
   }
   return context;
 }
+
+export { AccountType };
