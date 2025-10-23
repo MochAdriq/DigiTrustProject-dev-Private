@@ -1,76 +1,129 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useRef } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { useToast } from "@/hooks/use-toast"
-import { Download, Upload, Database, FileText, AlertTriangle } from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { useAccounts } from "@/contexts/account-context"
-import { getAllUsers } from "@/lib/auth"
-import { Progress } from "@/components/ui/progress"
+import { useState, useRef } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Download,
+  Upload,
+  Database,
+  FileText,
+  AlertTriangle,
+} from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useAccounts } from "@/contexts/account-context";
+// import { getAllUsers } from "@/lib/auth" // <-- IMPORT YANG SALAH SUDAH DIHAPUS
+import { Progress } from "@/components/ui/progress";
 
 interface BackupData {
-  version: string
-  timestamp: string
-  appName: string
+  version: string;
+  timestamp: string;
+  appName: string;
   data: {
-    accounts: any[]
-    customerAssignments: any[]
-    reportedAccounts: any[]
-    users: any[]
-  }
+    accounts: any[];
+    customerAssignments: any[];
+    reportedAccounts: any[];
+    users: any[];
+  };
   metadata: {
-    totalAccounts: number
-    totalAssignments: number
-    totalReports: number
-    totalUsers: number
-    exportedBy: string
-  }
+    totalAccounts: number;
+    totalAssignments: number;
+    totalReports: number;
+    totalUsers: number;
+    exportedBy: string;
+  };
 }
 
 export default function OfflineBackup() {
-  const { accounts, customerAssignments, reportedAccounts } = useAccounts()
-  const { toast } = useToast()
-  const [isExporting, setIsExporting] = useState(false)
-  const [isImporting, setIsImporting] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [importProgress, setImportProgress] = useState(0)
-  const [exportProgress, setExportProgress] = useState(0)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { accounts, customerAssignments, reportedAccounts } = useAccounts();
+  const { toast } = useToast();
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [importProgress, setImportProgress] = useState(0);
+  const [exportProgress, setExportProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Get current user info
   const getCurrentUser = () => {
     try {
-      const user = localStorage.getItem("currentUser")
-      return user ? JSON.parse(user) : { name: "Unknown", username: "unknown" }
+      const user = localStorage.getItem("currentUser"); // Asumsi info user ada di 'currentUser'
+      return user ? JSON.parse(user) : { name: "Unknown", username: "unknown" };
     } catch {
-      return { name: "Unknown", username: "unknown" }
+      return { name: "Unknown", username: "unknown" };
     }
-  }
+  };
 
+  // ============================================================
+  // FUNGSI YANG DIPERBAIKI
+  // ============================================================
   const createOfflineBackup = async () => {
-    setIsExporting(true)
-    setExportProgress(0)
+    setIsExporting(true);
+    setExportProgress(0);
 
     try {
-      // Simulate progress steps
-      setExportProgress(20)
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      // 1. Ambil token dari localStorage
+      //    Ganti 'token' jika key Anda berbeda
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error(
+          "Token otentikasi tidak ditemukan. Silakan login ulang."
+        );
+      }
 
-      // Get all users (without passwords for security)
-      const users = getAllUsers()
-      setExportProgress(40)
-      await new Promise((resolve) => setTimeout(resolve, 300))
+      const authHeaders = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      };
+
+      setExportProgress(10);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // 2. Fetch data users dari API
+      let users: any[] = [];
+      try {
+        const res = await fetch("/api/users", {
+          method: "GET",
+          headers: authHeaders,
+        });
+
+        if (res.status === 401 || res.status === 403) {
+          throw new Error(
+            "Akses ditolak. Anda tidak memiliki izin untuk mengambil data user."
+          );
+        }
+        if (!res.ok) {
+          throw new Error(`Gagal mengambil data user: ${res.statusText}`);
+        }
+        users = await res.json();
+      } catch (fetchError) {
+        // Tangani error fetch secara spesifik
+        console.error("Gagal fetch users for backup:", fetchError);
+        toast({
+          title: "❌ Gagal Mengambil Data User",
+          description:
+            fetchError instanceof Error
+              ? fetchError.message
+              : "Tidak dapat mengambil daftar user untuk backup.",
+          variant: "destructive",
+        });
+        setIsExporting(false);
+        setExportProgress(0);
+        return; // Hentikan eksekusi jika user gagal diambil
+      }
+
+      setExportProgress(40);
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
       // Get current user info
-      const currentUser = getCurrentUser()
-      setExportProgress(60)
-      await new Promise((resolve) => setTimeout(resolve, 300))
+      const currentUser = getCurrentUser();
+      setExportProgress(60);
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
       // Create comprehensive backup data
       const backupData: BackupData = {
@@ -81,92 +134,102 @@ export default function OfflineBackup() {
           accounts: accounts || [],
           customerAssignments: customerAssignments || [],
           reportedAccounts: reportedAccounts || [],
-          users: users || [],
+          users: users || [], // <-- Sekarang 'users' berisi data dari API
         },
         metadata: {
           totalAccounts: accounts?.length || 0,
           totalAssignments: customerAssignments?.length || 0,
           totalReports: reportedAccounts?.length || 0,
-          totalUsers: users?.length || 0,
+          totalUsers: users?.length || 0, // <-- total users juga sudah benar
           exportedBy: `${currentUser.name} (${currentUser.username})`,
         },
-      }
+      };
 
-      setExportProgress(80)
-      await new Promise((resolve) => setTimeout(resolve, 300))
+      setExportProgress(80);
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
       // Convert to JSON with pretty formatting
-      const jsonData = JSON.stringify(backupData, null, 2)
+      const jsonData = JSON.stringify(backupData, null, 2);
 
       // Create and download file
-      const blob = new Blob([jsonData], { type: "application/json" })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement("a")
+      const blob = new Blob([jsonData], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
 
       // Generate filename with timestamp
-      const now = new Date()
-      const dateStr = now.toISOString().split("T")[0] // YYYY-MM-DD
-      const timeStr = now.toTimeString().split(" ")[0].replace(/:/g, "-") // HH-MM-SS
-      const filename = `trustdigital-backup-${dateStr}-${timeStr}.json`
+      const now = new Date();
+      const dateStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
+      const timeStr = now.toTimeString().split(" ")[0].replace(/:/g, "-"); // HH-MM-SS
+      const filename = `trustdigital-backup-${dateStr}-${timeStr}.json`;
 
-      link.setAttribute("href", url)
-      link.setAttribute("download", filename)
-      link.style.visibility = "hidden"
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+      link.setAttribute("href", url);
+      link.setAttribute("download", filename);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
-      URL.revokeObjectURL(url)
-      setExportProgress(100)
+      URL.revokeObjectURL(url);
+      setExportProgress(100);
 
       // Save backup info to localStorage
       const backupInfo = {
         lastBackup: new Date().toISOString(),
         lastBackupFile: filename,
-        backupCount: (Number.parseInt(localStorage.getItem("backupCount") || "0") + 1).toString(),
-      }
-      localStorage.setItem("lastBackupInfo", JSON.stringify(backupInfo))
-      localStorage.setItem("backupCount", backupInfo.backupCount)
+        backupCount: (
+          Number.parseInt(localStorage.getItem("backupCount") || "0") + 1
+        ).toString(),
+      };
+      localStorage.setItem("lastBackupInfo", JSON.stringify(backupInfo));
+      localStorage.setItem("backupCount", backupInfo.backupCount);
 
       toast({
         title: "✅ Backup Berhasil!",
-        description: `File ${filename} telah didownload. Total data: ${backupData.metadata.totalAccounts} akun, ${backupData.metadata.totalAssignments} assignments.`,
+        description: `File ${filename} telah didownload. Total data: ${backupData.metadata.totalAccounts} akun, ${backupData.metadata.totalUsers} user.`,
         duration: 5000,
-      })
+      });
     } catch (error) {
-      console.error("Export error:", error)
+      console.error("Export error:", error);
       toast({
         title: "❌ Export Gagal",
-        description: "Terjadi kesalahan saat membuat backup. Silakan coba lagi.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat membuat backup.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsExporting(false)
-      setExportProgress(0)
+      setIsExporting(false);
+      setExportProgress(0);
     }
-  }
+  };
+  // ============================================================
+  // AKHIR DARI FUNGSI YANG DIPERBAIKI
+  // ============================================================
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+    const file = event.target.files?.[0];
     if (file) {
       if (file.type === "application/json" || file.name.endsWith(".json")) {
-        setSelectedFile(file)
+        setSelectedFile(file);
         toast({
           title: "📁 File Dipilih",
-          description: `File: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`,
-        })
+          description: `File: ${file.name} (${(file.size / 1024).toFixed(
+            1
+          )} KB)`,
+        });
       } else {
         toast({
           title: "❌ File Tidak Valid",
           description: "Silakan pilih file JSON backup yang valid.",
           variant: "destructive",
-        })
+        });
         if (fileInputRef.current) {
-          fileInputRef.current.value = ""
+          fileInputRef.current.value = "";
         }
       }
     }
-  }
+  };
 
   const importOfflineBackup = async () => {
     if (!selectedFile) {
@@ -174,33 +237,33 @@ export default function OfflineBackup() {
         title: "❌ Tidak Ada File",
         description: "Silakan pilih file backup terlebih dahulu.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
-    setIsImporting(true)
-    setImportProgress(0)
+    setIsImporting(true);
+    setImportProgress(0);
 
     try {
       // Read file content
-      setImportProgress(10)
-      const fileContent = await selectedFile.text()
-      setImportProgress(30)
+      setImportProgress(10);
+      const fileContent = await selectedFile.text();
+      setImportProgress(30);
 
       // Parse JSON
-      const backupData: BackupData = JSON.parse(fileContent)
-      setImportProgress(50)
+      const backupData: BackupData = JSON.parse(fileContent);
+      setImportProgress(50);
 
       // Validate backup structure
       if (!backupData.version || !backupData.data || !backupData.metadata) {
-        throw new Error("Format file backup tidak valid")
+        throw new Error("Format file backup tidak valid");
       }
 
       if (!backupData.appName?.includes("TrustDigital")) {
-        throw new Error("File backup bukan dari TrustDigital.ID")
+        throw new Error("File backup bukan dari TrustDigital.ID");
       }
 
-      setImportProgress(70)
+      setImportProgress(70);
 
       // Show confirmation with backup details
       const confirmMessage = `
@@ -215,15 +278,15 @@ Apakah Anda yakin ingin mengimport data ini?
 • Dibuat oleh: ${backupData.metadata.exportedBy}
 
 ⚠️ PERINGATAN: Data saat ini akan diganti!
-      `
+      `;
 
       if (!confirm(confirmMessage)) {
-        setIsImporting(false)
-        setImportProgress(0)
-        return
+        setIsImporting(false);
+        setImportProgress(0);
+        return;
       }
 
-      setImportProgress(90)
+      setImportProgress(90);
 
       // In a real implementation, you would import to database
       // For now, we'll show success message
@@ -231,49 +294,54 @@ Apakah Anda yakin ingin mengimport data ini?
         title: "✅ Import Berhasil!",
         description: `Data berhasil diimport: ${backupData.metadata.totalAccounts} akun, ${backupData.metadata.totalAssignments} assignments. Silakan refresh halaman.`,
         duration: 8000,
-      })
+      });
 
       // Save import info
       const importInfo = {
         lastImport: new Date().toISOString(),
         lastImportFile: selectedFile.name,
         importedData: backupData.metadata,
-      }
-      localStorage.setItem("lastImportInfo", JSON.stringify(importInfo))
+      };
+      localStorage.setItem("lastImportInfo", JSON.stringify(importInfo));
 
-      setImportProgress(100)
+      setImportProgress(100);
 
       // Reset file selection
-      setSelectedFile(null)
+      setSelectedFile(null);
       if (fileInputRef.current) {
-        fileInputRef.current.value = ""
+        fileInputRef.current.value = "";
       }
 
       // Suggest page refresh
       setTimeout(() => {
-        if (confirm("Import selesai! Refresh halaman untuk melihat data terbaru?")) {
-          window.location.reload()
+        if (
+          confirm("Import selesai! Refresh halaman untuk melihat data terbaru?")
+        ) {
+          window.location.reload();
         }
-      }, 2000)
+      }, 2000);
     } catch (error) {
-      console.error("Import error:", error)
+      console.error("Import error:", error);
       toast({
         title: "❌ Import Gagal",
-        description: error instanceof Error ? error.message : "Terjadi kesalahan saat mengimport data.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat mengimport data.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsImporting(false)
-      setImportProgress(0)
+      setIsImporting(false);
+      setImportProgress(0);
     }
-  }
+  };
 
   // Get backup statistics
   const getBackupStats = () => {
     try {
-      const backupInfo = localStorage.getItem("lastBackupInfo")
-      const importInfo = localStorage.getItem("lastImportInfo")
-      const backupCount = localStorage.getItem("backupCount") || "0"
+      const backupInfo = localStorage.getItem("lastBackupInfo");
+      const importInfo = localStorage.getItem("lastImportInfo");
+      const backupCount = localStorage.getItem("backupCount") || "0";
 
       return {
         lastBackup: backupInfo ? JSON.parse(backupInfo) : null,
@@ -284,18 +352,18 @@ Apakah Anda yakin ingin mengimport data ini?
           assignments: customerAssignments?.length || 0,
           reports: reportedAccounts?.length || 0,
         },
-      }
+      };
     } catch {
       return {
         lastBackup: null,
         lastImport: null,
         totalBackups: 0,
         currentDataSize: { accounts: 0, assignments: 0, reports: 0 },
-      }
+      };
     }
-  }
+  };
 
-  const stats = getBackupStats()
+  const stats = getBackupStats();
 
   return (
     <div className="space-y-6">
@@ -303,8 +371,9 @@ Apakah Anda yakin ingin mengimport data ini?
         <Database className="h-4 w-4" />
         <AlertTitle>💾 Backup Offline System</AlertTitle>
         <AlertDescription>
-          Backup semua data akun, customer, dan pengaturan ke file JSON. Data bisa diimport kembali kapan saja untuk
-          restore atau transfer ke device lain.
+          Backup semua data akun, customer, dan pengaturan ke file JSON. Data
+          bisa diimport kembali kapan saja untuk restore atau transfer ke device
+          lain.
         </AlertDescription>
       </Alert>
 
@@ -323,19 +392,27 @@ Apakah Anda yakin ingin mengimport data ini?
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="flex justify-between p-2 bg-blue-50 rounded">
                   <span>Akun:</span>
-                  <span className="font-mono font-bold">{stats.currentDataSize.accounts}</span>
+                  <span className="font-mono font-bold">
+                    {stats.currentDataSize.accounts}
+                  </span>
                 </div>
                 <div className="flex justify-between p-2 bg-green-50 rounded">
                   <span>Assignments:</span>
-                  <span className="font-mono font-bold">{stats.currentDataSize.assignments}</span>
+                  <span className="font-mono font-bold">
+                    {stats.currentDataSize.assignments}
+                  </span>
                 </div>
                 <div className="flex justify-between p-2 bg-yellow-50 rounded">
                   <span>Reports:</span>
-                  <span className="font-mono font-bold">{stats.currentDataSize.reports}</span>
+                  <span className="font-mono font-bold">
+                    {stats.currentDataSize.reports}
+                  </span>
                 </div>
                 <div className="flex justify-between p-2 bg-purple-50 rounded">
                   <span>Total Backup:</span>
-                  <span className="font-mono font-bold">{stats.totalBackups}</span>
+                  <span className="font-mono font-bold">
+                    {stats.totalBackups}
+                  </span>
                 </div>
               </div>
             </div>
@@ -344,8 +421,13 @@ Apakah Anda yakin ingin mengimport data ini?
               <div className="p-3 bg-gray-50 rounded-md">
                 <p className="text-sm text-gray-600">
                   <strong>Backup Terakhir:</strong>
-                  <br />📅 {new Date(stats.lastBackup.lastBackup).toLocaleString("id-ID")}
-                  <br />📁 {stats.lastBackup.lastBackupFile}
+                  <br />
+                  📅{" "}
+                  {new Date(stats.lastBackup.lastBackup).toLocaleString(
+                    "id-ID"
+                  )}
+                  <br />
+                  📁 {stats.lastBackup.lastBackupFile}
                 </p>
               </div>
             )}
@@ -379,7 +461,8 @@ Apakah Anda yakin ingin mengimport data ini?
             </Button>
 
             <p className="text-xs text-gray-500">
-              File JSON akan didownload berisi semua data akun, customer assignments, reports, dan user settings.
+              File JSON akan didownload berisi semua data akun, customer
+              assignments, reports, dan user settings.
             </p>
           </CardContent>
         </Card>
@@ -407,7 +490,8 @@ Apakah Anda yakin ingin mengimport data ini?
                 <div className="p-2 bg-green-50 rounded-md">
                   <p className="text-sm text-green-700">
                     ✅ <strong>{selectedFile.name}</strong>
-                    <br />📏 Size: {(selectedFile.size / 1024).toFixed(1)} KB
+                    <br />
+                    📏 Size: {(selectedFile.size / 1024).toFixed(1)} KB
                   </p>
                 </div>
               )}
@@ -417,9 +501,15 @@ Apakah Anda yakin ingin mengimport data ini?
               <div className="p-3 bg-gray-50 rounded-md">
                 <p className="text-sm text-gray-600">
                   <strong>Import Terakhir:</strong>
-                  <br />📅 {new Date(stats.lastImport.lastImport).toLocaleString("id-ID")}
-                  <br />📁 {stats.lastImport.lastImportFile}
-                  <br />📊 {stats.lastImport.importedData?.totalAccounts} akun,{" "}
+                  <br />
+                  📅{" "}
+                  {new Date(stats.lastImport.lastImport).toLocaleString(
+                    "id-ID"
+                  )}
+                  <br />
+                  📁 {stats.lastImport.lastImportFile}
+                  <br />
+                  📊 {stats.lastImport.importedData?.totalAccounts} akun,{" "}
                   {stats.lastImport.importedData?.totalAssignments} assignments
                 </p>
               </div>
@@ -457,8 +547,8 @@ Apakah Anda yakin ingin mengimport data ini?
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription className="text-xs">
-                <strong>⚠️ Peringatan:</strong> Import akan mengganti semua data saat ini. Pastikan sudah backup data
-                current sebelum import.
+                <strong>⚠️ Peringatan:</strong> Import akan mengganti semua data
+                saat ini. Pastikan sudah backup data current sebelum import.
               </AlertDescription>
             </Alert>
           </CardContent>
@@ -469,7 +559,8 @@ Apakah Anda yakin ingin mengimport data ini?
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
-            <FileText className="mr-2 h-5 w-5" />📋 Cara Penggunaan
+            <FileText className="mr-2 h-5 w-5" />
+            📋 Cara Penggunaan
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -507,5 +598,5 @@ Apakah Anda yakin ingin mengimport data ini?
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import type React from "react";
+import type React from "react"; // Impor React untuk tipe ChangeEvent
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle, Eye, EyeOff, Sparkles, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Image from "next/image";
-// ❌ HAPUS IMPORT INI, KARENA KITA TIDAK BISA MEMANGGILNYA DARI CLIENT
-// import { validateUser } from "@/lib/auth";
+// import { validateUser } from "@/lib/auth"; // (Ini sudah benar dihapus)
 
 export default function LoginForm() {
   const [username, setUsername] = useState("");
@@ -21,14 +20,13 @@ export default function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
-  // ✅ FUNGSI INI KITA UBAH TOTAL
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
 
     try {
-      // 1. Panggil API Route /api/login menggunakan fetch
+      // 1. Panggil API Route /api/login
       const response = await fetch("/api/login", {
         method: "POST",
         headers: {
@@ -40,22 +38,27 @@ export default function LoginForm() {
         }),
       });
 
-      // 2. Ambil data JSON dari respons
+      // 2. Ambil data JSON
       const data = await response.json();
 
-      // 3. Cek jika respons-nya sukses (status code 200-299)
+      // 3. Cek jika sukses
       if (response.ok) {
-        // `data` adalah objek ClientUser yang dikirim dari server
-        // 4. ✅ Simpan data user ke localStorage DI SINI (Client-side)
-        localStorage.setItem("currentUser", JSON.stringify(data));
+        // ⬇⬇⬇ PERBAIKAN UTAMA DI SINI ⬇⬇⬇
+        // 'data' sekarang adalah: { user: {...}, token: "..." }
+
+        // 4. Simpan data user (untuk UI, sapaan, dll)
+        localStorage.setItem("currentUser", JSON.stringify(data.user));
+
+        // 5. Simpan TOKEN (untuk otorisasi API)
+        localStorage.setItem("authToken", data.token);
+        // ⬆⬆⬆ SELESAI PERBAIKAN ⬆⬆⬆
 
         setError("");
         router.push("/dashboard");
       } else {
-        // 5. Jika gagal (status 401, 500, dll), tampilkan error dari server
+        // 6. Jika gagal, tampilkan error
         setError(
-          data.error ||
-            "Username atau password salah. Silakan periksa kembali kredensial Anda."
+          data.error || "Username atau password salah. Silakan periksa kembali."
         );
       }
     } catch (err) {
@@ -79,6 +82,7 @@ export default function LoginForm() {
 
   return (
     <div className="w-full max-w-md">
+      {/* ... (Logo JSX tidak berubah) ... */}
       <div className="flex justify-center mb-8">
         <div className="zenith-card p-4">
           <Image
@@ -93,6 +97,7 @@ export default function LoginForm() {
 
       <Card className="zenith-card border-0 animate-slide-up">
         <CardContent className="pt-8 pb-8 px-8">
+          {/* ... (Header JSX tidak berubah) ... */}
           <div className="text-center mb-8">
             <div className="flex items-center justify-center mb-4">
               <Sparkles className="h-8 w-8 text-zenith-primary mr-2" />
@@ -122,7 +127,10 @@ export default function LoginForm() {
                 id="username"
                 type="text"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                // ✅ Perbaikan Tipe TypeScript
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setUsername(e.target.value)
+                }
                 placeholder="Masukkan username"
                 className="zenith-input h-14 text-base"
                 required
@@ -141,7 +149,10 @@ export default function LoginForm() {
                   id="password"
                   type={showPassword ? "text" : "password"}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  // ✅ Perbaikan Tipe TypeScript
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setPassword(e.target.value)
+                  }
                   placeholder="Masukkan password"
                   className="zenith-input h-14 text-base pr-12"
                   required
@@ -178,6 +189,7 @@ export default function LoginForm() {
             </Button>
           </form>
 
+          {/* ... (Quick Login JSX tidak berubah) ... */}
           <div className="mt-8 p-6 glass-morphism rounded-2xl">
             <h3 className="font-bold text-zenith-primary mb-4 text-center">
               🚀 Quick Login
@@ -198,7 +210,6 @@ export default function LoginForm() {
                   Use
                 </Button>
               </div>
-
               <div className="flex items-center justify-between p-4 bg-white/60 rounded-xl border border-white/30">
                 <div className="text-sm">
                   <div className="font-semibold text-gray-800">👨‍💻 Operator</div>
@@ -215,7 +226,6 @@ export default function LoginForm() {
                 </Button>
               </div>
             </div>
-
             <p className="text-xs mt-4 text-center text-gray-600">
               💡 Klik "Use" untuk mengisi otomatis atau copy paste manual
             </p>

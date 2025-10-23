@@ -1,10 +1,10 @@
-// lib/auth-server.ts (BARU - HANYA SERVER-SIDE)
+// lib/auth-server.ts (SUDAH DIPERBAIKI - HANYA SERVER-SIDE)
 
 import { prisma } from "./prisma";
 import type { ClientUser } from "./auth"; // Kita impor tipe dari file client
 
 // ============================================================
-// 1️⃣ VALIDATE USER (Login) - (Hanya Server-Side)
+// 1️⃣ VALIDATE USER (Login) - (DIPERBAIKI)
 // ============================================================
 export async function validateUser(
   username: string,
@@ -33,6 +33,7 @@ export async function validateUser(
     const sessionUser: ClientUser = {
       id: user.id,
       username: user.username,
+      name: user.name || null, // <-- PERBAIKAN: Tambahkan 'name'
       role: user.role as "admin" | "operator",
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -47,7 +48,7 @@ export async function validateUser(
 }
 
 // ============================================================
-// 2️⃣ GET ALL USERS (Admin Only) - (Hanya Server-Side)
+// 2️⃣ GET ALL USERS (Admin Only) - (DIPERBAIKI)
 // ============================================================
 export async function getAllUsers(): Promise<ClientUser[]> {
   try {
@@ -55,6 +56,7 @@ export async function getAllUsers(): Promise<ClientUser[]> {
       select: {
         id: true,
         username: true,
+        name: true, // <-- PERBAIKAN: Select 'name'
         role: true,
         createdAt: true,
         updatedAt: true,
@@ -64,6 +66,7 @@ export async function getAllUsers(): Promise<ClientUser[]> {
 
     return users.map((u) => ({
       ...u,
+      name: u.name || null, // <-- PERBAIKAN: Pastikan 'name' ada
       role: u.role as "admin" | "operator",
     }));
   } catch (error) {
@@ -73,12 +76,13 @@ export async function getAllUsers(): Promise<ClientUser[]> {
 }
 
 // ============================================================
-// 3️⃣ ADD USER - (Hanya Server-Side)
+// 3️⃣ ADD USER - (DIPERBAIKI)
 // ============================================================
 export async function addUser(data: {
   username: string;
   password: string;
   role: "admin" | "operator";
+  name?: string | null; // <-- PERBAIKAN: Terima 'name' (opsional)
 }): Promise<boolean> {
   try {
     await prisma.user.create({
@@ -86,6 +90,7 @@ export async function addUser(data: {
         username: data.username.trim(),
         password: data.password.trim(), // <-- Simpan plain-text (TIDAK AMAN)
         role: data.role,
+        name: data.name ? data.name.trim() : null, // <-- PERBAIKAN: Simpan 'name'
       },
     });
     console.log("✅ User berhasil ditambahkan:", data.username);
@@ -99,6 +104,7 @@ export async function addUser(data: {
 // ============================================================
 // 4️⃣ UPDATE USER PASSWORD - (Hanya Server-Side)
 // ============================================================
+// (Tidak perlu diubah, sudah benar)
 export async function updateUserPassword(
   username: string,
   newPassword: string
@@ -119,6 +125,7 @@ export async function updateUserPassword(
 // ============================================================
 // 5️⃣ DELETE USER (kecuali admin utama) - (Hanya Server-Side)
 // ============================================================
+// (Tidak perlu diubah, sudah benar)
 export async function deleteUser(username: string): Promise<boolean> {
   if (username.toLowerCase() === "admin") {
     console.warn("⚠️ Admin utama tidak boleh dihapus.");

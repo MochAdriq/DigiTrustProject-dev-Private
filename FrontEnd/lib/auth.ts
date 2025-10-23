@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 export interface ClientUser {
   id: string;
   username: string;
+  name: string | null; // <-- PERBAIKAN: Tambahkan field 'name'
   role: "admin" | "operator";
   createdAt: Date;
   updatedAt: Date;
