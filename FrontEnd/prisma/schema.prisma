@@ -22,12 +22,12 @@ enum AccountType {
   vip
 }
 
-// Daftar platform tetap (16 item)
+// Daftar platform tetap (15 item)
 enum PlatformType {
   VIDIO_DIAMOND_MOBILE
   VIU_1_BULAN
   WE_TV
-  YT_1_BULAN
+  YOUTUBE_1_BULAN
   HBO
   LOKLOK
   PRIMEVIDEO
@@ -39,6 +39,7 @@ enum PlatformType {
   CHAT_GPT
   DISNEY
   NETFLIX
+  CAPCUT
 }
 
 // ==========================
