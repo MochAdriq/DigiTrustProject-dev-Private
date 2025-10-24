@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,11 +8,16 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { useAccounts } from "@/contexts/account-context";
-import { type AccountType } from "@/lib/database-service"; // Pastikan impor ini benar
-import { AlertCircle, Info, Package } from "lucide-react"; // Hapus Shield jika tidak dipakai lagi
+// Impor tipe dari service
+import type { AccountType, PlatformType } from "@/lib/database-service";
+import {
+  AlertCircle,
+  Info,
+  Package,
+  Calendar as CalendarIcon,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
-// Hapus impor Calendar jika tidak dipakai lagi
 import {
   Select,
   SelectContent,
@@ -21,201 +25,160 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-// Hapus impor date-fns dan cn jika tidak dipakai lagi di sini
+// Impor untuk Kalender
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { format, addDays } from "date-fns";
+import { cn } from "@/lib/utils";
+
+// --- OPSI PLATFORM (Sama seperti di form lain) ---
+const platformOptions: { value: PlatformType; label: string }[] = [
+  { value: "NETFLIX", label: "Netflix" },
+  { value: "DISNEY", label: "Disney+" },
+  { value: "HBO", label: "HBO Go" },
+  { value: "PRIMEVIDEO", label: "Prime Video" },
+  { value: "VIDIO_DIAMOND_MOBILE", label: "Vidio Diamond Mobile" },
+  { value: "VIDIO_PLATINUM", label: "Vidio Platinum" },
+  { value: "VIU_1_BULAN", label: "Viu (1 Bulan)" },
+  { value: "WE_TV", label: "WeTV" },
+  { value: "YOUTUBE_1_BULAN", label: "YouTube (1 Bulan)" },
+  { value: "LOKLOK", label: "LokLok" },
+  { value: "SPOTIFY_FAMPLAN_1_BULAN", label: "Spotify 1 Bulan" },
+  { value: "SPOTIFY_FAMPLAN_2_BULAN", label: "Spotify 2 Bulan" },
+  { value: "CANVA_1_BULAN", label: "Canva (1 Bulan)" },
+  { value: "CANVA_1_TAHUN", label: "Canva (1 Tahun)" },
+  { value: "CHAT_GPT", label: "Chat GPT" },
+  { value: "CAPCUT", label: "Capcut" },
+];
+// --- AKHIR OPSI PLATFORM ---
+
+// Helper jumlah profil default
+const getDefaultProfileCount = (type: AccountType): number => {
+  if (type === "private") return 8;
+  if (type === "sharing") return 20;
+  if (type === "vip") return 6; // Ganti vvip jadi vip
+  return 8; // Default fallback
+};
 
 export default function BulkImport() {
   const { toast } = useToast();
-  // Hapus addGaransiAccounts dari destrukturisasi
-  const { addAccounts, addAccountsWithCustomProfiles } = useAccounts();
+  // Ambil fungsi addAccounts dari context
+  // Pastikan fungsi ini di context sudah diupdate untuk memanggil API Bulk
+  const { addAccounts } = useAccounts();
   const [emails, setEmails] = useState("");
-  const [password, setPassword] = useState(""); // Password utama jika mode email_password DAN input hanya email
   const [accountType, setAccountType] = useState<AccountType>("private");
+  const [platform, setPlatform] = useState<PlatformType | "">(""); // State Platform BARU
+  const [expiresAt, setExpiresAt] = useState<Date | undefined>(
+    addDays(new Date(), 30)
+  ); // State ExpiresAt BARU
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [customProfileMode, setCustomProfileMode] = useState(false);
-  const [profileCount, setProfileCount] = useState<number>(8);
-  const [sharedPassword, setSharedPassword] = useState(""); // Password untuk mode email_only
+  const [error, setError] = useState<string | null>(null);
+  const [sharedPassword, setSharedPassword] = useState("");
   const [inputMode, setInputMode] = useState<"email_password" | "email_only">(
     "email_password"
-  ); // State untuk mode input
-
-  const getDefaultProfileCount = (type: AccountType) => {
-    if (type === "private") return 8;
-    if (type === "sharing") return 20;
-    if (type === "vvip") return 5; // Pastikan ini 'vvip' bukan 'vip'
-    return 8; // Default fallback
-  };
-
-  const getMaxProfileCount = (type: AccountType) => {
-    if (type === "private") return 8;
-    if (type === "sharing") return 20;
-    if (type === "vvip") return 5; // Pastikan ini 'vvip' bukan 'vip'
-    return 8; // Default fallback
-  };
+  );
 
   const handleAccountTypeChange = (type: AccountType) => {
     setAccountType(type);
-    if (!customProfileMode) {
-      setProfileCount(getDefaultProfileCount(type));
-    }
   };
-
-  const handleCustomProfileToggle = (enabled: boolean) => {
-    setCustomProfileMode(enabled);
-    if (!enabled) {
-      setProfileCount(getDefaultProfileCount(accountType));
-    }
-  };
-
-  // Hapus fungsi handleWarrantyModeToggle
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError("");
+    setError(null);
 
     try {
-      // 1. Parsing Input Email
-      const emailList = emails
+      const lines = emails
         .split("\n")
-        .map((email) => email.trim())
-        .filter((email) => email.length > 0);
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
 
-      // 2. Validasi Input Dasar
-      if (emailList.length === 0) {
-        throw new Error("Masukkan setidaknya satu alamat email.");
-      }
-      // Validasi password dipindah ke bawah
+      if (lines.length === 0)
+        throw new Error("Masukkan setidaknya satu data akun.");
+      if (!platform) throw new Error("Platform harus dipilih.");
+      if (!expiresAt) throw new Error("Tanggal kadaluarsa harus dipilih.");
 
-      // 3. Validasi Custom Profile Count (jika aktif)
-      if (
-        customProfileMode &&
-        (profileCount < 1 || profileCount > getMaxProfileCount(accountType))
-      ) {
-        throw new Error(
-          `Jumlah profile harus antara 1 dan ${getMaxProfileCount(
-            accountType
-          )} untuk akun ${accountType}.`
-        );
-      }
-
-      // 4. Mempersiapkan Data Akun (sesuai mode input)
-      const accountsToAdd: {
-        email: string;
-        password: string;
-        type: AccountType;
-      }[] = [];
-      let parseError = false;
-
-      // Tentukan password final berdasarkan mode input
-      const finalPassword =
-        inputMode === "email_only" ? sharedPassword.trim() : password.trim(); // Password utama tidak dipakai jika email:password
-
-      // Validasi password wajib ada (baik shared atau dari input utama jika email:password)
-      if (inputMode === "email_only" && !finalPassword) {
+      const finalSharedPassword = sharedPassword.trim();
+      if (inputMode === "email_only" && !finalSharedPassword) {
         throw new Error(
           "Masukkan shared password untuk mode input email saja."
         );
       }
-      // Untuk mode email:password, password per baris yang divalidasi
-      // if (inputMode === 'email_password' && !finalPassword) { // Ini tidak perlu lagi
-      //    throw new Error("Masukkan password utama jika menggunakan format email:password.");
-      // }
 
-      emailList.forEach((line) => {
+      const accountsToAdd: {
+        email: string;
+        password: string;
+        type: AccountType;
+        platform: PlatformType;
+      }[] = [];
+      let parseErrorLine: string | null = null;
+
+      lines.forEach((line) => {
+        if (parseErrorLine) return;
         let email = "";
-        let linePassword = ""; // Default kosong, akan diisi
+        let linePassword = "";
 
         if (inputMode === "email_password") {
-          const parts = line.split(/[:\s,;\t]+/); // Pemisah lebih fleksibel
-          if (parts.length >= 2 && parts[0].includes("@")) {
+          const parts = line.split(/[:\s,;\t]+/);
+          if (parts.length >= 2 && parts[0].includes("@") && parts[1]) {
             email = parts[0].trim();
-            linePassword = parts[1].trim(); // Ambil password dari baris
-            if (!linePassword) {
-              // Validasi password per baris
-              setError(`Password kosong di baris: "${line}".`);
-              parseError = true;
-              return;
-            }
+            linePassword = parts[1].trim();
           } else {
-            setError(
-              `Format salah di baris: "${line}". Harusnya email:password`
-            );
-            parseError = true;
+            parseErrorLine = `Format salah di baris: "${line}". Harusnya email:password`;
             return;
           }
         } else {
           // email_only mode
           if (line.includes("@")) {
             email = line.trim();
-            linePassword = finalPassword; // Gunakan shared password
+            linePassword = finalSharedPassword;
           } else {
-            setError(`Format email salah di baris: "${line}"`);
-            parseError = true;
+            parseErrorLine = `Format email salah di baris: "${line}"`;
             return;
           }
         }
-
-        if (email && linePassword && !parseError) {
-          accountsToAdd.push({
-            email,
-            password: linePassword,
-            type: accountType,
-          });
-        }
+        accountsToAdd.push({
+          email,
+          password: linePassword,
+          type: accountType,
+          platform: platform as PlatformType,
+        });
       });
 
-      if (parseError) {
-        setIsLoading(false);
-        return;
-      }
+      if (parseErrorLine) throw new Error(parseErrorLine);
+      if (accountsToAdd.length === 0)
+        throw new Error("Tidak ada akun valid yang bisa ditambahkan.");
 
-      if (accountsToAdd.length === 0) {
-        setError("Tidak ada akun valid yang bisa ditambahkan.");
-        setIsLoading(false);
-        return;
-      }
+      // Panggil fungsi addAccounts dari context (yang memanggil API Bulk)
+      // Pastikan context `addAccounts` dimodifikasi untuk menerima expiresAt
+      await addAccounts(accountsToAdd, expiresAt.toISOString());
 
-      // 5. Memanggil Fungsi Context (Hanya Mode Normal)
-      if (customProfileMode) {
-        const accountsWithCustomProfiles = accountsToAdd.map((acc) => ({
-          ...acc,
-          profileCount,
-        }));
-        await addAccountsWithCustomProfiles(accountsWithCustomProfiles);
-      } else {
-        await addAccounts(accountsToAdd);
-      }
-
-      // 6. Tampilkan Pesan Sukses
       toast({
         title: "✅ Import Berhasil!",
-        description: `Berhasil mengimpor ${accountsToAdd.length} akun ${accountType} ke Stok Utama.`,
+        description: `Berhasil mengimpor ${
+          accountsToAdd.length
+        } akun ${accountType} (${platform.replace(/_/g, " ")}) ke Stok Utama.`,
         duration: 5000,
       });
 
-      // 7. Reset Form
       setEmails("");
-      setPassword("");
+      setPlatform("");
+      setExpiresAt(addDays(new Date(), 30));
       setSharedPassword("");
-      setCustomProfileMode(false);
-      setProfileCount(getDefaultProfileCount(accountType));
-      setError("");
-    } catch (error) {
-      // 8. Tangani Error
-      setError(
-        error instanceof Error ? error.message : "Gagal mengimpor akun."
-      );
+      setError(null);
+    } catch (error: any) {
+      console.error("Bulk import error:", error);
+      setError(error.message || "Gagal mengimpor akun.");
       toast({
         title: "❌ Gagal Import",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Terjadi kesalahan saat impor.",
+        description: error.message || "Terjadi kesalahan saat impor.",
         variant: "destructive",
       });
     } finally {
-      // 9. Set Loading Selesai
       setIsLoading(false);
     }
   };
@@ -231,48 +194,9 @@ export default function BulkImport() {
           </Alert>
         )}
 
-        {/* Hapus Seleksi Mode Garansi */}
-
-        {/* Custom Profile Mode (Tetap ada) */}
-        <div className="zenith-card p-6 border-0">
-          <div className="flex items-center space-x-3 mb-4">
-            <input
-              type="checkbox"
-              id="custom-profile-mode"
-              checked={customProfileMode}
-              onChange={(e) => handleCustomProfileToggle(e.target.checked)}
-              className="rounded border-gray-300 w-5 h-5"
-            />
-            <Label
-              htmlFor="custom-profile-mode"
-              className="font-bold text-zenith-primary flex items-center"
-            >
-              <Package className="h-5 w-5 mr-2" />
-              🎯 Custom Profile Count
-            </Label>
-          </div>
-          {customProfileMode && (
-            <Alert className="bg-green-50 border-green-200">
-              <Info className="h-4 w-4" />
-              <AlertDescription className="text-sm">
-                <strong>Custom Profile:</strong> Atur jumlah profile per akun
-                secara manual.{" "}
-                <strong className="text-green-600">
-                  Akun akan masuk ke stok utama.
-                </strong>
-              </AlertDescription>
-            </Alert>
-          )}
-        </div>
-
-        {/* Hapus Warranty Date Picker */}
-
         {/* Pilihan Tipe Akun */}
         <div className="space-y-3">
-          <Label
-            htmlFor="account-type"
-            className="text-base font-semibold text-gray-700"
-          >
+          <Label className="text-base font-semibold text-gray-700">
             Account Type
           </Label>
           <RadioGroup
@@ -281,63 +205,118 @@ export default function BulkImport() {
             onValueChange={(value) =>
               handleAccountTypeChange(value as AccountType)
             }
-            className="flex flex-wrap gap-x-6 gap-y-2" // flex-wrap untuk responsif
+            className="flex flex-wrap gap-x-6 gap-y-2"
           >
-            {/* Private */}
             <div className="flex items-center space-x-3">
               <RadioGroupItem
                 value="private"
-                id="private"
+                id="private-bulk"
                 className="w-5 h-5"
               />
-              <Label htmlFor="private" className="text-base">
-                Private (
-                {customProfileMode
-                  ? `Custom: ${profileCount}`
-                  : `${getDefaultProfileCount("private")}`}{" "}
-                profiles)
+              <Label htmlFor="private-bulk" className="text-base">
+                Private ({getDefaultProfileCount("private")} profiles)
               </Label>
             </div>
-            {/* Sharing */}
             <div className="flex items-center space-x-3">
               <RadioGroupItem
                 value="sharing"
-                id="sharing"
+                id="sharing-bulk"
                 className="w-5 h-5"
               />
-              <Label htmlFor="sharing" className="text-base">
-                Sharing (
-                {customProfileMode
-                  ? `Custom: ${profileCount}`
-                  : `${getDefaultProfileCount("sharing")}`}{" "}
-                profiles)
+              <Label htmlFor="sharing-bulk" className="text-base">
+                Sharing ({getDefaultProfileCount("sharing")} profiles)
               </Label>
             </div>
-            {/* VVIP */}
             <div className="flex items-center space-x-3">
-              <RadioGroupItem value="vvip" id="vvip" className="w-5 h-5" />
-              <Label htmlFor="vvip" className="text-base">
-                VVIP (
-                {customProfileMode
-                  ? `Custom: ${profileCount}`
-                  : `${getDefaultProfileCount("vvip")}`}{" "}
-                profiles)
+              <RadioGroupItem value="vip" id="vip-bulk" className="w-5 h-5" />
+              <Label htmlFor="vip-bulk" className="text-base">
+                VIP ({getDefaultProfileCount("vip")} profiles)
               </Label>
             </div>
           </RadioGroup>
+        </div>
+
+        {/* Input Platform */}
+        <div className="space-y-2">
+          <Label
+            htmlFor="bulk-platform"
+            className="text-base font-semibold text-gray-700"
+          >
+            Platform (untuk semua akun)
+          </Label>
+          <Select
+            value={platform}
+            onValueChange={(value) => setPlatform(value as PlatformType)}
+            disabled={isLoading}
+          >
+            <SelectTrigger id="bulk-platform" className="h-14 border-gray-300">
+              <SelectValue placeholder="Pilih platform" />
+            </SelectTrigger>
+            <SelectContent className="max-h-60">
+              {platformOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Input ExpiresAt */}
+        <div className="space-y-2">
+          <Label
+            htmlFor="bulk-expiresAt"
+            className="text-base font-semibold text-gray-700"
+          >
+            Tanggal Kadaluarsa (untuk semua akun)
+          </Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                id="bulk-expiresAt"
+                className={cn(
+                  "w-full justify-start text-left font-normal h-14 border-gray-300",
+                  !expiresAt && "text-muted-foreground"
+                )}
+                disabled={isLoading}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {expiresAt
+                  ? format(expiresAt, "dd MMMM yyyy")
+                  : "Pilih tanggal"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <CalendarComponent
+                mode="single"
+                selected={expiresAt}
+                onSelect={setExpiresAt}
+                disabled={(date) => {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  return date < today;
+                }}
+                defaultMonth={expiresAt || new Date()}
+                fromMonth={new Date()}
+                toYear={new Date().getFullYear() + 5}
+                captionLayout="dropdown"
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Opsi Mode Input */}
         <div className="space-y-2">
           <Label className="font-semibold">Mode Input Akun</Label>
           <div className="flex flex-wrap gap-2">
-            {" "}
-            {/* flex-wrap untuk responsif */}
             <Button
               type="button"
               size="sm"
               variant={inputMode === "email_password" ? "default" : "outline"}
               onClick={() => setInputMode("email_password")}
+              disabled={isLoading}
             >
               Email:Password per Baris
             </Button>
@@ -346,16 +325,17 @@ export default function BulkImport() {
               size="sm"
               variant={inputMode === "email_only" ? "default" : "outline"}
               onClick={() => setInputMode("email_only")}
+              disabled={isLoading}
             >
               Email per Baris + Shared Password
             </Button>
           </div>
         </div>
 
-        {/* Input Akun */}
+        {/* Input Akun (Textarea) */}
         <div className="space-y-3">
           <Label
-            htmlFor="emails"
+            htmlFor="bulk-emails"
             className="text-base font-semibold text-gray-700"
           >
             {inputMode === "email_password"
@@ -363,185 +343,87 @@ export default function BulkImport() {
               : "Email Akun (Satu email per baris)"}
           </Label>
           <Textarea
-            id="emails"
+            id="bulk-emails"
             value={emails}
             onChange={(e) => setEmails(e.target.value)}
             placeholder={
               inputMode === "email_password"
-                ? "contoh@email.com:password123\ncontohlain@email.com:passlain456"
-                : "contoh@email.com\ncontohlain@email.com"
+                ? "email1@contoh.com:pass1\nemail2@contoh.com:pass2"
+                : "email1@contoh.com\nemail2@contoh.com"
             }
-            className="min-h-[150px] zenith-input"
+            className="min-h-[150px] border-gray-300"
             required
+            disabled={isLoading}
           />
           <p className="text-sm text-gray-500">
             {inputMode === "email_password"
-              ? "Pisahkan email dan password dengan titik dua (:), spasi, koma, atau tab."
-              : "Masukkan satu alamat email per baris."}
+              ? "Pisahkan email & password dengan :, spasi, koma, atau tab."
+              : "Satu email per baris."}
           </p>
         </div>
 
-        {/* Input Shared Password (muncul jika mode email_only) */}
+        {/* Input Shared Password */}
         {inputMode === "email_only" && (
           <div className="space-y-3">
             <Label
-              htmlFor="shared-password"
+              htmlFor="bulk-shared-password"
               className="text-base font-semibold text-gray-700"
             >
               Shared Password (untuk semua email di atas)
             </Label>
             <Input
-              id="shared-password"
+              id="bulk-shared-password"
               type="text"
               value={sharedPassword}
               onChange={(e) => setSharedPassword(e.target.value)}
               placeholder="Enter shared password"
-              className="zenith-input h-14"
+              className="h-14 border-gray-300"
               required={inputMode === "email_only"}
+              disabled={isLoading}
             />
           </div>
         )}
 
-        {/* Input Password Utama (muncul jika mode email:password, opsional jika password sudah di baris) */}
-        {/* Sepertinya input password utama ini tidak diperlukan lagi jika password bisa ditaruh per baris */}
-        {/* Jika masih diperlukan, uncomment blok ini: */}
-        {/* {inputMode === "email_password" && (
-             <div className="space-y-3">
-               <Label htmlFor="main-password" className="text-base font-semibold text-gray-700">
-                 Password Utama (Opsional)
-               </Label>
-               <Input
-                 id="main-password"
-                 type="text"
-                 value={password}
-                 onChange={(e) => setPassword(e.target.value)}
-                 placeholder="Gunakan jika password di baris kosong"
-                 className="zenith-input h-14"
-               />
-               <p className="text-sm text-gray-500">Password ini akan digunakan jika password di baris data akun tidak diisi.</p>
-             </div>
-         )} */}
-
-        {/* Custom Profile Count Selector */}
-        {customProfileMode && ( // Hanya tampil jika custom mode aktif
-          <div className="space-y-3">
-            <Label
-              htmlFor="profile-count"
-              className="text-base font-semibold text-gray-700"
-            >
-              🎯 Jumlah Profile per Akun (Max: {getMaxProfileCount(accountType)}{" "}
-              untuk {accountType})
-            </Label>
-            <div className="flex space-x-4">
-              <Select
-                value={profileCount.toString()}
-                onValueChange={(value) =>
-                  setProfileCount(Number.parseInt(value))
-                }
-              >
-                <SelectTrigger className="w-48 h-14">
-                  <SelectValue placeholder="Pilih jumlah profile" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from(
-                    { length: getMaxProfileCount(accountType) },
-                    (_, i) => i + 1
-                  ).map((num) => (
-                    <SelectItem key={num} value={num.toString()}>
-                      {num} profile{num > 1 ? "s" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Input
-                type="number"
-                min="1"
-                max={getMaxProfileCount(accountType)}
-                value={profileCount}
-                onChange={(e) =>
-                  setProfileCount(
-                    Math.max(
-                      1,
-                      Math.min(
-                        getMaxProfileCount(accountType),
-                        Number.parseInt(e.target.value) || 1
-                      )
-                    ) // Pastikan angka valid
-                  )
-                }
-                className="w-32 h-14"
-                placeholder="Custom"
-              />
-            </div>
-            <p className="text-sm text-gray-500">
-              Pilih dari dropdown atau ketik manual.
-            </p>
-          </div>
-        )}
-
-        {/* Teks Info di Bawah Textarea */}
+        {/* Info Jumlah Profil Default */}
         <p className="text-sm text-gray-500 pt-2">
-          {customProfileMode
-            ? `📦 Setiap akun akan dibuat dengan ${profileCount} profile${
-                profileCount > 1 ? "s" : ""
-              } dan masuk ke Stok Utama.`
-            : `📦 Setiap akun akan dibuat dengan ${getDefaultProfileCount(
-                accountType
-              )} profile${
-                getDefaultProfileCount(accountType) > 1 ? "s" : ""
-              } dan masuk ke Stok Utama.`}
+          📦 Setiap akun akan dibuat dengan{" "}
+          {getDefaultProfileCount(accountType)} profile dan masuk ke Stok Utama.
         </p>
 
         {/* Tombol Submit */}
         <Button
           type="submit"
-          className="zenith-button w-full h-16 text-lg font-bold"
-          disabled={isLoading} // Hapus pengecekan warrantyDate
+          className="w-full h-16 text-lg font-bold bg-green-600 hover:bg-green-700"
+          disabled={isLoading}
         >
-          {isLoading
-            ? "Importing..."
-            : // Hapus : warrantyMode ? ...
-            customProfileMode
-            ? `🎯 Import ${profileCount} Profile${
-                profileCount > 1 ? "s" : ""
-              } (Stok)`
-            : "📦 Import ke Stok Utama"}
+          {isLoading ? "Importing..." : "📦 Import ke Stok Utama"}
         </Button>
       </form>
 
-      {/* Info Panel (Hanya Mode Normal) */}
-      <div className="zenith-card p-6 border-0">
-        <h4 className="font-bold mb-4 gradient-text text-lg">
+      {/* Info Panel */}
+      <div className="border border-gray-200 rounded-lg p-6">
+        <h4 className="font-bold mb-4 text-gray-800 text-lg">
           💡 Info Mode Import:
         </h4>
-        {/* Hapus grid md:grid-cols-2 */}
         <div className="text-sm">
-          {/* Hanya Info Mode Normal */}
-          <div className="p-4 bg-green-50 rounded-xl">
-            <h5 className="font-bold text-green-800 mb-2 flex items-center">
-              <Package className="h-4 w-4 mr-2" />
-              📦 Impor ke Stok Utama:
+          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+            <h5 className="font-semibold text-green-800 mb-2 flex items-center">
+              <Package className="h-4 w-4 mr-2" /> Impor ke Stok Utama:
             </h5>
             <ul className="space-y-1 list-disc list-inside text-green-700">
               <li>
                 Akun yang diimpor akan <strong>MASUK ke stok utama</strong>.
               </li>
               <li>
-                Bisa custom jumlah profile jika opsi "Custom Profile Count"
-                dicentang.
+                Jumlah profil otomatis sesuai Tipe Akun (
+                {getDefaultProfileCount(accountType)} untuk {accountType}).
               </li>
-              <li>
-                Digunakan untuk menambah stok akun operasional sehari-hari.
-              </li>
+              <li>Digunakan untuk menambah stok akun operasional.</li>
               <li>Akun ini bisa di-request oleh operator.</li>
-              <li>Menambah hitungan "Available Profiles" di dashboard.</li>
+              <li>Menambah hitungan "Available Profiles".</li>
             </ul>
           </div>
         </div>
-
-        {/* Hapus Bagian Info Garansi */}
-        {/* Hapus Bagian PENTING - Pemisahan Data */}
       </div>
     </div>
   );
