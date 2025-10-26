@@ -173,7 +173,7 @@ export default function DashboardTabs() {
                       <p>Lihat Akun Bermasalah</p>
                     </TooltipContent>
                   </Tooltip>
-                  <DialogContent className="max-w-4xl">
+                  <DialogContent className="max-w-6xl">
                     <DialogHeader>
                       <DialogTitle>Reported Accounts</DialogTitle>
                     </DialogHeader>

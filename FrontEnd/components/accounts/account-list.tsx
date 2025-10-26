@@ -31,6 +31,16 @@ import type { Account, PlatformType } from "@prisma/client";
 // Import constants
 import { PLATFORM_DISPLAY_NAMES } from "@/lib/constants";
 
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationPrevious,
+  PaginationNext,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
+
 // Helper for Profile type
 type Profile = { profile: string; pin: string; used: boolean };
 
@@ -53,6 +63,8 @@ interface AccountListProps {
 }
 
 export default function AccountList({ type }: AccountListProps) {
+  const ITEMS_PER_PAGE = 10; // Jumlah item per halaman, bisa disesuaikan
+  const [currentPage, setCurrentPage] = useState(1);
   const {
     getAccountsByType,
     getRemainingDays,
@@ -87,11 +99,29 @@ export default function AccountList({ type }: AccountListProps) {
     setAccountIdToDelete(accountId);
     setIsDeleteDialogOpen(true);
   }, []);
+
+  const filteredAccounts = getAccountsByType(type); // Ambil data dulu
+
   const confirmDelete = useCallback(async () => {
     if (!accountIdToDelete) return;
     setIsDeleting(true);
     try {
       await deleteAccount(accountIdToDelete);
+
+      // ▼▼▼ PENYESUAIAN PAGINATION SETELAH DELETE ▼▼▼
+      // Hitung ulang total item SETELAH delete (asumsi deleteAccount berhasil)
+      const newTotalItems = filteredAccounts.length - 1;
+      const newTotalPages = Math.ceil(newTotalItems / ITEMS_PER_PAGE);
+
+      // Jika halaman saat ini lebih besar dari total halaman baru (misal: hapus item terakhir di halaman 3)
+      // dan total halaman baru masih lebih dari 0
+      if (currentPage > newTotalPages && newTotalPages > 0) {
+        setCurrentPage(newTotalPages); // Mundur ke halaman terakhir yang baru
+      } else if (newTotalItems === 0) {
+        setCurrentPage(1); // Reset ke halaman 1 jika tidak ada item tersisa
+      }
+      // Jika tidak, tetap di halaman saat ini (data akan di-refresh oleh slice)
+      // ▼▼▼ SELESAI PENYESUAIAN ▼▼▼
     } catch (error) {
       console.error("Error during delete confirmation:", error);
     } finally {
@@ -99,9 +129,39 @@ export default function AccountList({ type }: AccountListProps) {
       setAccountIdToDelete(null);
       setIsDeleteDialogOpen(false);
     }
-  }, [accountIdToDelete, deleteAccount]);
+  }, [
+    accountIdToDelete,
+    deleteAccount,
+    filteredAccounts.length,
+    currentPage,
+    ITEMS_PER_PAGE,
+  ]);
 
-  const filteredAccounts = getAccountsByType(type);
+  const totalItems = filteredAccounts.length;
+  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+
+  // ▼▼▼ EFEK UNTUK RESET HALAMAN JIKA FILTER BERUBAH ▼▼▼
+  // (Berguna jika 'type' berubah dari props dan halaman saat ini jadi tidak valid)
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages); // Set ke halaman terakhir yang valid
+    } else if (totalPages === 0) {
+      setCurrentPage(1); // Set ke 1 jika tidak ada data
+    }
+  }, [currentPage, totalPages]);
+  // ▲▲▲ SELESAI EFEK ▲▲▲
+
+  // Hitung index awal dan akhir untuk slice
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+
+  // Ambil data hanya untuk halaman saat ini
+  const paginatedAccounts = filteredAccounts.slice(startIndex, endIndex);
+  // ▲▲▲ SELESAI LOGIKA PAGINATION ▲▲▲
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
 
   // Helper function to get platform display name
   const getPlatformDisplayName = (
@@ -111,10 +171,6 @@ export default function AccountList({ type }: AccountListProps) {
     const key = platformKey as keyof typeof PLATFORM_DISPLAY_NAMES;
     return PLATFORM_DISPLAY_NAMES[key] || platformKey;
   };
-
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
 
   return (
     <>
@@ -133,6 +189,7 @@ export default function AccountList({ type }: AccountListProps) {
               </p>
             </div>
           ) : (
+            // ▼▼▼ KONTEN JIKA ADA DATA (TABEL) ▼▼▼
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -149,32 +206,43 @@ export default function AccountList({ type }: AccountListProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAccounts.map((account: Account) => {
+                  {paginatedAccounts.map((account: Account) => {
                     let availableProfiles = 0;
                     let totalProfiles = 0;
                     let profileDisplay = "-/-";
-                    if (Array.isArray(account.profiles)) {
+
+                    // ▼▼▼ Logika parsing profile yang lebih aman ▼▼▼
+                    let profilesArray: Profile[] = [];
+                    if (typeof account.profiles === "string") {
                       try {
-                        const profilesArray = (
-                          typeof account.profiles === "string"
-                            ? JSON.parse(account.profiles)
-                            : account.profiles
+                        profilesArray = JSON.parse(
+                          account.profiles
                         ) as Profile[];
-                        if (Array.isArray(profilesArray)) {
-                          totalProfiles = profilesArray.length;
-                          availableProfiles = profilesArray.filter(
-                            (p) =>
-                              typeof p === "object" &&
-                              p !== null &&
-                              p.used === false
-                          ).length;
-                          profileDisplay = `${availableProfiles}/${totalProfiles}`;
-                        }
                       } catch (e) {
-                        console.error("Error processing profiles:", e);
-                        profileDisplay = "Error";
+                        console.error("Error parsing profiles JSON:", e);
+                        profileDisplay = "Error"; // Tampilkan error jika JSON tidak valid
                       }
+                    } else if (Array.isArray(account.profiles)) {
+                      // Jika sudah berbentuk array (misal dari context/state)
+                      profilesArray = account.profiles;
                     }
+
+                    // Pastikan profilesArray adalah array sebelum di-loop
+                    if (Array.isArray(profilesArray)) {
+                      totalProfiles = profilesArray.length;
+                      availableProfiles = profilesArray.filter(
+                        (p) =>
+                          typeof p === "object" &&
+                          p !== null &&
+                          p.used === false
+                      ).length;
+                      profileDisplay = `${availableProfiles}/${totalProfiles}`;
+                    } else if (profileDisplay !== "Error") {
+                      // Jika bukan string JSON, bukan array, dan belum error
+                      profileDisplay = "N/A"; // Data tidak dikenal
+                    }
+                    // ▲▲▲ Selesai logika parsing profile ▲▲▲
+
                     const daysLeft = getRemainingDays(account);
                     const isExpired = daysLeft < 0;
                     const isExpiringToday = daysLeft === 0 && !isExpired;
@@ -206,7 +274,7 @@ export default function AccountList({ type }: AccountListProps) {
                                 ? "secondary"
                                 : "default"
                             }
-                            className="font-mono text-xs"
+                            className="font-mono text-xs bg-blue-600 hover:bg-blue-700 text-white"
                           >
                             {profileDisplay}
                           </Badge>
@@ -220,7 +288,7 @@ export default function AccountList({ type }: AccountListProps) {
                                 ? "secondary"
                                 : "default"
                             }
-                            className="font-mono text-xs"
+                            className="font-mono text-xs bg-blue-600 hover:bg-blue-700 text-white"
                           >
                             {daysLeft} days
                           </Badge>
@@ -292,8 +360,78 @@ export default function AccountList({ type }: AccountListProps) {
               </Table>
             </div>
           )}
+          {/* ▲▲▲ SELESAI KONTEN JIKA ADA DATA ▲▲▲ */}
+
+          {/* ▼▼▼ TAMBAHKAN PAGINATION UI ▼▼▼ */}
+          {/* (Ditempatkan di dalam CardContent, setelah blok ternary) */}
+          {totalPages > 1 && ( // Hanya tampilkan jika lebih dari 1 halaman
+            <Pagination className="mt-6">
+              <PaginationContent>
+                {/* Tombol Previous */}
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#" // href="#" agar tidak pindah halaman
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCurrentPage((prev) => Math.max(1, prev - 1));
+                    }}
+                    // Nonaktifkan jika di halaman pertama
+                    className={
+                      currentPage === 1 ? "pointer-events-none opacity-50" : ""
+                    }
+                    aria-disabled={currentPage === 1}
+                  />
+                </PaginationItem>
+
+                {/* Nomor Halaman (Logika sederhana) */}
+                {/* TODO: Untuk pagination yang lebih kompleks (ellipsis, dll.) 
+                  perlu logika tambahan untuk generate nomor halaman 
+                  (misal: hanya tampilkan 1, ..., 4, 5, 6, ..., 10)
+                */}
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                  (page) => (
+                    <PaginationItem key={page}>
+                      <PaginationLink
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setCurrentPage(page);
+                        }}
+                        // Tandai halaman aktif
+                        isActive={currentPage === page}
+                      >
+                        {page}
+                      </PaginationLink>
+                    </PaginationItem>
+                  )
+                )}
+                {/* Bisa ditambahkan <PaginationEllipsis /> jika halamannya banyak */}
+
+                {/* Tombol Next */}
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCurrentPage((prev) => Math.min(totalPages, prev + 1));
+                    }}
+                    // Nonaktifkan jika di halaman terakhir
+                    className={
+                      currentPage === totalPages
+                        ? "pointer-events-none opacity-50"
+                        : ""
+                    }
+                    aria-disabled={currentPage === totalPages}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+          {/* ▲▲▲ SELESAI PAGINATION UI ▲▲▲ */}
         </CardContent>
       </Card>
+
+      {/* Dialog Edit Akun */}
       {editingAccount && (
         <EditAccountDialog
           account={editingAccount}
@@ -301,6 +439,8 @@ export default function AccountList({ type }: AccountListProps) {
           onOpenChange={setIsEditDialogOpen}
         />
       )}
+
+      {/* Dialog Konfirmasi Delete */}
       <AlertDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}

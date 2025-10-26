@@ -6,11 +6,15 @@ import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import DashboardTabs from "@/components/dashboard/dashboard-tabs";
 import { AccountProvider } from "@/contexts/account-context";
 import LoadingSpinner from "@/components/shared/loading-spinner";
+import { PLATFORM_LIST } from "@/lib/constants";
 
 export default function DashboardClientPage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedPlatform, setSelectedPlatform] = useState<string>(
+    PLATFORM_LIST[0]
+  );
 
   useEffect(() => {
     const currentUser = localStorage.getItem("currentUser");
