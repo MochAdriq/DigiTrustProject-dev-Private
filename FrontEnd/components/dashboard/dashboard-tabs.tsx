@@ -41,38 +41,52 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import AccountSearch from "@/components/accounts/account-search";
-import { useAccounts, AccountType } from "@/contexts/account-context";
+// --- PERBAIKAN IMPOR ---
+import { useAccounts } from "@/contexts/account-context"; // Impor hook useAccounts
+import type { AccountType } from "@prisma/client"; // Impor AccountType dari Prisma
+// --- AKHIR PERBAIKAN ---
 import LoadingSpinner from "../shared/loading-spinner";
 import Link from "next/link";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/lib/auth"; // Path sudah benar
 
 export default function DashboardTabs() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
   const { isLoading, refreshData } = useAccounts();
+  // State activeTab sekarang menggunakan AccountType dari Prisma
   const [activeTab, setActiveTab] = useState<AccountType>("private");
   const [isRequestOpen, setIsRequestOpen] = useState(false);
-  const [isAddOpen, setIsAddOpen] = useState(false); // <-- State baru untuk dialog "Add Account"
+  const [isAddOpen, setIsAddOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
-  const [isGaransiOpen, setIsGaransiOpen] = useState(false);
+  const [isGaransiOpen, setIsGaransiOpen] = useState(false); // State ini masih ada, pastikan penggunaannya
   const [isActivityLogsOpen, setIsActivityLogsOpen] = useState(false);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  // State currentUser tidak lagi dibutuhkan, langsung pakai 'user' dari useAuth
+  // const [currentUser, setCurrentUser] = useState<any>(null);
 
+  // useEffect untuk currentUser tidak lagi dibutuhkan
+  /*
   useEffect(() => {
     const user = localStorage.getItem("currentUser");
     if (user) {
       const parsedUser = JSON.parse(user);
-      setCurrentUser(parsedUser);
+      // setCurrentUser(parsedUser); // Tidak perlu
       if (parsedUser.role === "admin") {
-        setActiveTab("private");
+        setActiveTab("private"); // Set default tab admin bisa tetap di sini
       }
     }
   }, []);
+  */
+  // Opsional: Set default tab admin berdasarkan 'user' dari useAuth
+  useEffect(() => {
+    if (user?.role === "admin") {
+      setActiveTab("private");
+    }
+  }, [user]); // Jalankan saat 'user' berubah
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -84,19 +98,20 @@ export default function DashboardTabs() {
     return <LoadingSpinner />;
   }
 
+  // JSX tidak berubah dari sini ke bawah
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <NotificationSystem />
+        {" "}
+        <NotificationSystem />{" "}
       </div>
-
       <Tabs
         value={activeTab}
         onValueChange={(value) => setActiveTab(value as AccountType)}
         className="w-full"
       >
         <div className="flex items-center justify-between mb-4">
-          {/* ======== BAGIAN KIRI ======== */}
+          {/* Bagian Kiri */}
           <TooltipProvider>
             <div className="flex items-center space-x-4">
               <TabsList className="grid w-auto grid-cols-3 mr-2 bg-blue-50 p-1 rounded-lg">
@@ -120,38 +135,27 @@ export default function DashboardTabs() {
                 </TabsTrigger>
               </TabsList>
               <div className="flex items-center space-x-2">
+                {/* Tombol Garansi */}
                 <TooltipProvider>
-                  <div className="flex items-center space-x-2">
-                    {" "}
-                    {/* Pastikan Link ada di dalam div ini */}
-                    <Dialog
-                      open={isGaransiOpen}
-                      onOpenChange={setIsGaransiOpen}
-                    >
-                      {" "}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Link href="/dashboard/garansi" passHref>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="text-blue-600 border-blue-300 hover:bg-blue-600 hover:text-white"
-                            >
-                              <Shield className="h-4 w-4" />
-                            </Button>
-                          </Link>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Cek Garansi Akun (Halaman Baru)</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </Dialog>{" "}
-                    <Dialog
-                      open={isBackupOpen}
-                      onOpenChange={setIsBackupOpen}
-                    ></Dialog>
-                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      {/* Pastikan Link/Button Garansi */}
+                      <Link href="/dashboard/garansi" passHref>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="text-blue-600 border-blue-300 hover:bg-blue-600 hover:text-white"
+                        >
+                          <Shield className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Cek Garansi Akun (Halaman Baru)</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </TooltipProvider>
+                {/* Tombol Reported */}
                 <Dialog>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -176,6 +180,7 @@ export default function DashboardTabs() {
                     <ReportedAccounts />
                   </DialogContent>
                 </Dialog>
+                {/* Tombol Backup */}
                 <Dialog open={isBackupOpen} onOpenChange={setIsBackupOpen}>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -201,108 +206,115 @@ export default function DashboardTabs() {
                   </DialogContent>
                 </Dialog>
               </div>
-              <>
-                <div className="h-6 w-px bg-gray-300"></div>
-                <div className="flex items-center space-x-2">
-                  <Dialog open={isStatsOpen} onOpenChange={setIsStatsOpen}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="text-blue-600 border-blue-300 hover:bg-blue-600 hover:text-white"
-                          >
-                            <BarChart className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Lihat Statistik</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle>Customer Statistics</DialogTitle>
-                      </DialogHeader>
-                      <CustomerStatistics />
-                    </DialogContent>
-                  </Dialog>
-                  <Dialog
-                    open={isActivityLogsOpen}
-                    onOpenChange={setIsActivityLogsOpen}
-                  >
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="text-blue-600 border-blue-300 hover:bg-blue-600 hover:text-white"
-                          >
-                            <Activity className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Log Aktivitas</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle>Activity Logs</DialogTitle>
-                      </DialogHeader>
-                      <ActivityLogs />
-                    </DialogContent>
-                  </Dialog>
-                  <Dialog
-                    open={isUserManagementOpen}
-                    onOpenChange={setIsUserManagementOpen}
-                  >
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="text-blue-600 border-blue-300 hover:bg-blue-600 hover:text-white"
-                            disabled={!isAdmin}
-                          >
-                            <Users className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {isAdmin ? (
-                          <p>Manajemen User.</p>
-                        ) : (
-                          <p>Anda tidak memiliki akses untuk Manajemen User.</p>
-                        )}
-                      </TooltipContent>
-                    </Tooltip>
-                    <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle>User Management</DialogTitle>
-                      </DialogHeader>
-                      <UserManagement />
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </>
+              {/* Separator & Admin Buttons */}
+              {isAdmin && ( // Hanya tampilkan jika admin
+                <>
+                  <div className="h-6 w-px bg-gray-300"></div>
+                  <div className="flex items-center space-x-2">
+                    {/* Tombol Statistik */}
+                    <Dialog open={isStatsOpen} onOpenChange={setIsStatsOpen}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="text-blue-600 border-blue-300 hover:bg-blue-600 hover:text-white"
+                            >
+                              <BarChart className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Lihat Statistik</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>
+                            Customer & Operator Statistics
+                          </DialogTitle>
+                        </DialogHeader>
+                        <CustomerStatistics />
+                      </DialogContent>
+                    </Dialog>
+                    {/* Tombol Activity Log */}
+                    <Dialog
+                      open={isActivityLogsOpen}
+                      onOpenChange={setIsActivityLogsOpen}
+                    >
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="text-blue-600 border-blue-300 hover:bg-blue-600 hover:text-white"
+                            >
+                              <Activity className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Log Aktivitas</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>Activity Logs</DialogTitle>
+                        </DialogHeader>
+                        <ActivityLogs />
+                      </DialogContent>
+                    </Dialog>
+                    {/* Tombol User Management */}
+                    <Dialog
+                      open={isUserManagementOpen}
+                      onOpenChange={setIsUserManagementOpen}
+                    >
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="text-blue-600 border-blue-300 hover:bg-blue-600 hover:text-white"
+                              disabled={!isAdmin}
+                            >
+                              <Users className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {isAdmin ? (
+                            <p>Manajemen User.</p>
+                          ) : (
+                            <p>Anda tidak punya akses.</p>
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>User Management</DialogTitle>
+                        </DialogHeader>
+                        <UserManagement />
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </>
+              )}
             </div>
           </TooltipProvider>
 
-          {/* ======== BAGIAN KANAN ======== */}
+          {/* Bagian Kanan */}
           <TooltipProvider>
             <div className="flex items-center space-x-2">
               {isAdmin && (
                 <div className="flex space-x-2 border-r border-gray-300 pr-2 mr-2">
-                  {" "}
+                  {/* Tombol Add Account */}
                   <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <DialogTrigger asChild>
-                          {/* Style bisa disesuaikan, misal pakai icon saja */}
                           <Button
                             variant="outline"
                             size="icon"
@@ -315,9 +327,9 @@ export default function DashboardTabs() {
                       </TooltipTrigger>
                       <TooltipContent>
                         {isAdmin ? (
-                          <p>Tambah 1 (satu) akun baru ke stok {activeTab}.</p>
+                          <p>Tambah 1 akun ke stok {activeTab}.</p>
                         ) : (
-                          <p>Anda tidak memiliki akses untuk menambah akun.</p>
+                          <p>Tidak ada akses.</p>
                         )}
                       </TooltipContent>
                     </Tooltip>
@@ -336,8 +348,8 @@ export default function DashboardTabs() {
                       />
                     </DialogContent>
                   </Dialog>
+                  {/* Tombol Bulk Import */}
                   <Dialog>
-                    {" "}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <DialogTrigger asChild>
@@ -353,9 +365,9 @@ export default function DashboardTabs() {
                       </TooltipTrigger>
                       <TooltipContent>
                         {isAdmin ? (
-                          <p>Impor banyak akun sekaligus via teks.</p>
+                          <p>Impor banyak akun.</p>
                         ) : (
-                          <p>Anda tidak memiliki akses untuk impor massal.</p>
+                          <p>Tidak ada akses.</p>
                         )}
                       </TooltipContent>
                     </Tooltip>
@@ -368,7 +380,7 @@ export default function DashboardTabs() {
                   </Dialog>
                 </div>
               )}
-
+              {/* Tombol Request Account */}
               <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -380,7 +392,7 @@ export default function DashboardTabs() {
                     </DialogTrigger>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Buka form untuk meminta akun baru.</p>
+                    <p>Buka form request akun.</p>
                   </TooltipContent>
                 </Tooltip>
                 <DialogContent className="max-w-4xl">
@@ -390,6 +402,7 @@ export default function DashboardTabs() {
                   <RequestAccount />
                 </DialogContent>
               </Dialog>
+              {/* Tombol Refresh */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -409,9 +422,10 @@ export default function DashboardTabs() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Muat ulang data dari server.</p>
+                  <p>Muat ulang data.</p>
                 </TooltipContent>
               </Tooltip>
+              {/* Tombol Search */}
               <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -428,7 +442,7 @@ export default function DashboardTabs() {
                     </DialogTrigger>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Cari akun berdasarkan email.</p>
+                    <p>Cari akun email.</p>
                   </TooltipContent>
                 </Tooltip>
                 <DialogContent className="sm:max-w-md">
@@ -442,17 +456,19 @@ export default function DashboardTabs() {
           </TooltipProvider>
         </div>
 
-        {/* Konten Tab untuk Admin (Sekarang hanya menampilkan daftar akun) */}
+        {/* Konten Tab */}
         <div className="mt-6">
           <TabsContent value="private">
-            <AccountList type="private" />
+            {" "}
+            <AccountList type="private" />{" "}
           </TabsContent>
           <TabsContent value="sharing">
-            <AccountList type="sharing" />
+            {" "}
+            <AccountList type="sharing" />{" "}
           </TabsContent>
           <TabsContent value="vip">
-            {/* Placeholder untuk vip, kita akan fungsikan AccountList di sini nanti */}
-            <AccountList type="vip" />
+            {" "}
+            <AccountList type="vip" />{" "}
           </TabsContent>
         </div>
       </Tabs>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react"; // Import useCallback
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { useAccounts } from "@/contexts/account-context";
 import { ListFilter, Edit, Trash } from "lucide-react";
-import EditAccountDialog from "./edit-account-dialog"; // Pastikan path ini benar
+import EditAccountDialog from "./edit-account-dialog";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -26,13 +26,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import LoadingSpinner from "../shared/loading-spinner";
-import { useAuth } from "@/hooks/use-auth";
-import type { Account } from "@prisma/client"; // Impor tipe Account
+import { useAuth } from "@/lib/auth"; // <-- Path diperbaiki
+import type { Account, PlatformType } from "@prisma/client";
+// Import constants
+import { PLATFORM_DISPLAY_NAMES } from "@/lib/constants";
 
-// Helper untuk tipe Profile (jika belum ada secara global)
+// Helper for Profile type
 type Profile = { profile: string; pin: string; used: boolean };
 
-// Helper untuk judul card
+// Helper for card title
 const getTitle = (type: "private" | "sharing" | "vip"): string => {
   switch (type) {
     case "private":
@@ -51,8 +53,6 @@ interface AccountListProps {
 }
 
 export default function AccountList({ type }: AccountListProps) {
-  // Ambil fungsi dan state dari context
-  // getAccountsByType di context sudah benar (filter client-side state)
   const {
     getAccountsByType,
     getRemainingDays,
@@ -62,10 +62,8 @@ export default function AccountList({ type }: AccountListProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
-  // State lokal
-  // Gabungkan state loading context dan lokal
   const [isLoading, setIsLoading] = useState(true);
-  const [editingAccount, setEditingAccount] = useState<Account | null>(null); // Gunakan tipe Account
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [accountIdToDelete, setAccountIdToDelete] = useState<string | null>(
     null
@@ -73,59 +71,47 @@ export default function AccountList({ type }: AccountListProps) {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Update loading state berdasarkan context dan loading lokal
   useEffect(() => {
-    // Jika context selesai loading DAN loading lokal selesai
     if (!isContextLoading) {
-      // Beri sedikit jeda agar UI tidak terasa 'jumpy'
       const timer = setTimeout(() => setIsLoading(false), 200);
       return () => clearTimeout(timer);
     } else {
-      setIsLoading(true); // Tetap loading jika context masih loading
+      setIsLoading(true);
     }
   }, [isContextLoading]);
-
-  // Handler Edit (gunakan useCallback)
   const handleEdit = useCallback((account: Account) => {
-    // Pastikan mengirim data yang benar ke dialog
-    // Tipe Account dari Prisma harusnya sudah pakai expiresAt (camelCase)
     setEditingAccount(account);
     setIsEditDialogOpen(true);
-  }, []); // Dependency kosong karena fungsi tidak bergantung state komponen ini
-
-  // Handler Delete (gunakan useCallback)
+  }, []);
   const handleDelete = useCallback((accountId: string) => {
     setAccountIdToDelete(accountId);
     setIsDeleteDialogOpen(true);
   }, []);
-
-  // Konfirmasi Delete (gunakan useCallback)
   const confirmDelete = useCallback(async () => {
     if (!accountIdToDelete) return;
-
     setIsDeleting(true);
     try {
-      // Panggil deleteAccount dari context (yang memanggil API)
-      const success = await deleteAccount(accountIdToDelete);
-      // Context sudah handle toast
-      if (!success) {
-        console.error("Delete operation failed in context.");
-        // Mungkin tampilkan toast error spesifik di sini jika perlu
-      }
+      await deleteAccount(accountIdToDelete);
     } catch (error) {
       console.error("Error during delete confirmation:", error);
-      // Context sudah handle toast error
     } finally {
       setIsDeleting(false);
       setAccountIdToDelete(null);
       setIsDeleteDialogOpen(false);
     }
-  }, [accountIdToDelete, deleteAccount]); // Tambahkan dependency
+  }, [accountIdToDelete, deleteAccount]);
 
-  // Ambil data yang sudah difilter dari context (client-side filter)
   const filteredAccounts = getAccountsByType(type);
 
-  // Tampilkan loading jika context ATAU loading lokal aktif
+  // Helper function to get platform display name
+  const getPlatformDisplayName = (
+    platformKey: PlatformType | null | undefined
+  ): string => {
+    if (!platformKey) return "N/A";
+    const key = platformKey as keyof typeof PLATFORM_DISPLAY_NAMES;
+    return PLATFORM_DISPLAY_NAMES[key] || platformKey;
+  };
+
   if (isLoading) {
     return <LoadingSpinner />;
   }
@@ -133,14 +119,12 @@ export default function AccountList({ type }: AccountListProps) {
   return (
     <>
       <Card className="border-gray-200 shadow-sm">
-        {/* --- JUDUL CARD DINAMIS --- */}
         <CardHeader className="bg-blue-600 text-white rounded-t-lg">
           <CardTitle className="flex items-center">
             <ListFilter className="mr-2 h-5 w-5" />
-            {getTitle(type)} Accounts {/* Gunakan helper getTitle */}
+            {getTitle(type)} Accounts
           </CardTitle>
         </CardHeader>
-        {/* --- AKHIR JUDUL CARD --- */}
         <CardContent className="pt-6">
           {filteredAccounts.length === 0 ? (
             <div className="text-center py-8">
@@ -155,6 +139,7 @@ export default function AccountList({ type }: AccountListProps) {
                   <TableRow>
                     <TableHead>Email</TableHead>
                     <TableHead>Password</TableHead>
+                    <TableHead>Platform</TableHead> {/* Header added */}
                     <TableHead className="text-center">
                       Profiles (Avail/Total)
                     </TableHead>
@@ -164,37 +149,35 @@ export default function AccountList({ type }: AccountListProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {/* Gunakan tipe Account di map */}
                   {filteredAccounts.map((account: Account) => {
-                    // --- PERHITUNGAN PROFIL LEBIH AMAN ---
                     let availableProfiles = 0;
                     let totalProfiles = 0;
                     let profileDisplay = "-/-";
                     if (Array.isArray(account.profiles)) {
                       try {
-                        const profilesArray =
-                          account.profiles as unknown as Profile[];
-                        totalProfiles = profilesArray.length;
-                        availableProfiles = profilesArray.filter(
-                          (p) =>
-                            typeof p === "object" &&
-                            p !== null &&
-                            p.used === false
-                        ).length;
-                        profileDisplay = `${availableProfiles}/${totalProfiles}`;
+                        const profilesArray = (
+                          typeof account.profiles === "string"
+                            ? JSON.parse(account.profiles)
+                            : account.profiles
+                        ) as Profile[];
+                        if (Array.isArray(profilesArray)) {
+                          totalProfiles = profilesArray.length;
+                          availableProfiles = profilesArray.filter(
+                            (p) =>
+                              typeof p === "object" &&
+                              p !== null &&
+                              p.used === false
+                          ).length;
+                          profileDisplay = `${availableProfiles}/${totalProfiles}`;
+                        }
                       } catch (e) {
                         console.error("Error processing profiles:", e);
                         profileDisplay = "Error";
                       }
                     }
-                    // --- AKHIR PERHITUNGAN PROFIL ---
-
-                    // --- LOGIKA STATUS EXPIRED DISAMAKAN ---
                     const daysLeft = getRemainingDays(account);
-                    const isExpired = daysLeft < 0; // Expired jika negatif
-                    const isExpiringToday = daysLeft === 0 && !isExpired; // Kondisi hari ini
-                    const isActive = !isExpired && !isExpiringToday;
-                    // --- AKHIR LOGIKA STATUS ---
+                    const isExpired = daysLeft < 0;
+                    const isExpiringToday = daysLeft === 0 && !isExpired;
 
                     return (
                       <TableRow
@@ -207,30 +190,35 @@ export default function AccountList({ type }: AccountListProps) {
                         <TableCell className="text-sm">
                           {account.password}
                         </TableCell>
+                        {/* Platform Cell Updated */}
+                        <TableCell className="text-xs">
+                          <Badge variant="outline">
+                            {getPlatformDisplayName(account.platform)}
+                          </Badge>
+                        </TableCell>
+                        {/* End Platform Cell */}
                         <TableCell className="text-center">
-                          {/* Badge Profil */}
                           <Badge
                             variant={
                               availableProfiles === 0
                                 ? "destructive"
                                 : availableProfiles < totalProfiles / 3
-                                ? "secondary" // Ubah threshold jika perlu
-                                : "default" // Ganti 'success'
+                                ? "secondary"
+                                : "default"
                             }
-                            className="font-mono text-xs" // Styling tambahan
+                            className="font-mono text-xs"
                           >
                             {profileDisplay}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center">
-                          {/* Badge Sisa Hari */}
                           <Badge
                             variant={
                               daysLeft <= 3
                                 ? "destructive"
                                 : daysLeft <= 7
-                                ? "secondary" // Ganti yellow ke secondary
-                                : "default" // Ganti green ke default
+                                ? "secondary"
+                                : "default"
                             }
                             className="font-mono text-xs"
                           >
@@ -238,7 +226,6 @@ export default function AccountList({ type }: AccountListProps) {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {/* Badge Status */}
                           {account.reported ? (
                             <Badge variant="destructive" className="text-xs">
                               Reported
@@ -250,23 +237,20 @@ export default function AccountList({ type }: AccountListProps) {
                           ) : isExpiringToday ? (
                             <Badge variant="secondary" className="text-xs">
                               Expires Today
-                            </Badge> // Warna beda untuk hari ini
+                            </Badge>
                           ) : (
                             <Badge
                               variant="default"
                               className="text-xs bg-green-600 hover:bg-green-700"
                             >
-                              {" "}
-                              {/* Default = Aktif */}
                               Active
                             </Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          {/* Tombol Actions */}
                           <div className="flex justify-end space-x-1">
                             <Button
-                              variant="ghost" // Lebih halus
+                              variant="ghost"
                               size="icon"
                               onClick={
                                 isAdmin ? () => handleEdit(account) : undefined
@@ -276,13 +260,13 @@ export default function AccountList({ type }: AccountListProps) {
                               }`}
                               disabled={!isAdmin}
                               aria-disabled={!isAdmin}
-                              title="Edit Account" // Tambah tooltip
+                              title="Edit Account"
                             >
                               <Edit className="h-4 w-4" />
                               <span className="sr-only">Edit</span>
-                            </Button>
+                            </Button>{" "}
                             <Button
-                              variant="ghost" // Lebih halus
+                              variant="ghost"
                               size="icon"
                               onClick={
                                 isAdmin
@@ -294,7 +278,7 @@ export default function AccountList({ type }: AccountListProps) {
                               }`}
                               disabled={!isAdmin}
                               aria-disabled={!isAdmin}
-                              title="Delete Account" // Tambah tooltip
+                              title="Delete Account"
                             >
                               <Trash className="h-4 w-4" />
                               <span className="sr-only">Delete</span>
@@ -310,8 +294,6 @@ export default function AccountList({ type }: AccountListProps) {
           )}
         </CardContent>
       </Card>
-
-      {/* Dialog Edit */}
       {editingAccount && (
         <EditAccountDialog
           account={editingAccount}
@@ -319,8 +301,6 @@ export default function AccountList({ type }: AccountListProps) {
           onOpenChange={setIsEditDialogOpen}
         />
       )}
-
-      {/* Dialog Konfirmasi Delete */}
       <AlertDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
@@ -332,12 +312,9 @@ export default function AccountList({ type }: AccountListProps) {
               This action cannot be undone. This will permanently delete the
               account{" "}
               <strong>
-                {/* --- PERBAIKAN DI SINI --- */}
-                {/* Gunakan filteredAccounts dan beri tipe 'Account' pada 'acc' */}
                 {filteredAccounts.find(
                   (acc: Account) => acc.id === accountIdToDelete
                 )?.email || ""}
-                {/* --- AKHIR PERBAIKAN --- */}
               </strong>
               .
             </AlertDialogDescription>
@@ -346,7 +323,7 @@ export default function AccountList({ type }: AccountListProps) {
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              className="bg-red-600 hover:bg-red-700" // Warna delete lebih kuat
+              className="bg-red-600 hover:bg-red-700"
               disabled={isDeleting}
             >
               {isDeleting ? "Deleting..." : "Yes, delete account"}

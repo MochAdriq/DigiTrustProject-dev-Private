@@ -4,40 +4,32 @@ import type React from "react";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-// --- IMPORTS DIPERBARUI ---
-import { useAccounts } from "@/contexts/account-context"; // Import context hook
-import type { Account } from "@prisma/client"; // Import tipe Account
-// --- AKHIR IMPORTS ---
+import { useAccounts } from "@/contexts/account-context";
+import type { Account, PlatformType } from "@prisma/client"; // Import PlatformType
+// Import constants
+import { PLATFORM_DISPLAY_NAMES } from "@/lib/constants";
 import { Search, Copy, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 
 interface AccountSearchProps {
-  onClose?: () => void; // Optional close handler
+  onClose?: () => void;
 }
 
-// Helper Tipe Profile (jika belum global)
+// Helper Profile Type
 type Profile = { profile: string; pin: string; used: boolean };
 
 export default function AccountSearch({ onClose }: AccountSearchProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  // --- CONTEXT DIPERBARUI ---
-  // accounts tidak lagi dipakai untuk search, tapi bisa untuk debug info
   const { searchAccountsByEmail, getRemainingDays, accounts } = useAccounts();
-  // --- AKHIR CONTEXT ---
   const { toast } = useToast();
-  // --- STATE HASIL DIPERBARUI ---
-  // Simpan objek Account lengkap dari Prisma (atau null)
   const [searchResult, setSearchResult] = useState<Account | null>(null);
-  // --- AKHIR STATE HASIL ---
 
-  // --- HANDLE SEARCH DIPERBARUI ---
+  // Handle Search (no change needed here)
   const handleSearch = async (e: React.FormEvent) => {
-    // Buat jadi async
     e.preventDefault();
-    const trimmedSearch = searchTerm.trim(); // Trim dulu
-
+    const trimmedSearch = searchTerm.trim();
     if (!trimmedSearch) {
       toast({
         title: "Error",
@@ -46,29 +38,16 @@ export default function AccountSearch({ onClose }: AccountSearchProps) {
       });
       return;
     }
-
     setIsSearching(true);
-    setSearchResult(null); // Reset hasil sebelumnya
-
+    setSearchResult(null);
     try {
-      console.log("=== SEARCHING VIA API ===");
-      console.log("Search term:", trimmedSearch);
-
-      // Panggil fungsi search dari context (yang memanggil API)
+      console.log("=== SEARCHING VIA API ===", "Search term:", trimmedSearch);
       const results: Account[] = await searchAccountsByEmail(trimmedSearch);
-
       console.log("API Results:", results);
-
       if (results && results.length > 0) {
-        // Ambil hasil pertama jika ditemukan
         const firstResult = results[0];
-
-        // Set state dengan data lengkap dari hasil pertama
-        // getRemainingDays akan dipanggil saat render hasil
-        setSearchResult(firstResult); // Simpan objek Account utuh
-
+        setSearchResult(firstResult);
         console.log("Displaying first result:", firstResult);
-
         toast({
           title: "✅ Account Found",
           description: `Found account: ${firstResult.email}${
@@ -94,30 +73,29 @@ export default function AccountSearch({ onClose }: AccountSearchProps) {
       setIsSearching(false);
     }
   };
-  // --- AKHIR HANDLE SEARCH ---
 
-  // --- COPY TO CLIPBOARD DIPERBARUI ---
+  // Helper function for platform name
+  const getPlatformDisplayName = (
+    platformKey: PlatformType | null | undefined
+  ): string => {
+    if (!platformKey) return "N/A";
+    const key = platformKey as keyof typeof PLATFORM_DISPLAY_NAMES;
+    return PLATFORM_DISPLAY_NAMES[key] || platformKey;
+  };
+
+  // Updated Copy function
   const copyToClipboard = () => {
     if (!searchResult) return;
-
-    // Pastikan profiles adalah array yang valid dan coba parse
     let profilesArray: Profile[] = [];
     if (typeof searchResult.profiles === "string") {
       try {
         profilesArray = JSON.parse(searchResult.profiles);
-      } catch (e) {
-        console.error("Failed to parse profiles JSON string:", e);
-      }
+      } catch {}
     } else if (Array.isArray(searchResult.profiles)) {
-      // Jika sudah array (meski tipe JsonValue), coba assert
       profilesArray = searchResult.profiles as unknown as Profile[];
     }
-
-    // Cari profil pertama yang valid dan belum terpakai
     const firstAvailableProfile = profilesArray.find(
-      (
-        p
-      ): p is Profile => // Type guard
+      (p): p is Profile =>
         typeof p === "object" &&
         p !== null &&
         typeof p.profile === "string" &&
@@ -125,72 +103,41 @@ export default function AccountSearch({ onClose }: AccountSearchProps) {
         typeof p.used === "boolean" &&
         !p.used
     );
-
-    // Ambil platform dari hasil search
-    const platformName = searchResult.platform || "Unknown Platform"; // Fallback
-    // Format tipe akun
+    const platformName = getPlatformDisplayName(searchResult.platform); // Use helper
     const accountTypeFormatted =
       searchResult.type.charAt(0).toUpperCase() + searchResult.type.slice(1);
-    // Hitung sisa hari lagi di sini
     const daysLeft = getRemainingDays(searchResult);
-
-    // Buat teks dinamis
-    const accountText = `!!! ${platformName
-      .toUpperCase()
-      .replace(/_/g, " ")} - TRUSTDIGITAL.ID !!!
-
-1. Login hanya di 1 DEVICE !!
-2. Garansi akun 23 Hari
-3. Ketika ada kendala akun :
- - Hapus chache app
- - (DIBACA) GUNAKAN DATA SELULER/HOTSPOT SAAT LOGIN SAJA
- - Install Ulang App
-4. Dilarang mengubah Nama profile, Pin, membuka pengaturan akun !!
-
-💌 Email: ${searchResult.email}
-🔑 Password: ${searchResult.password}
-👤 Profil: ${firstAvailableProfile?.profile || "No available profiles"}
-PIN: ${firstAvailableProfile?.pin || "N/A"}
-Tipe: ${accountTypeFormatted}
-⏱️ Sisa hari: ${daysLeft} hari
-
-Melanggar? Akun ditarik + denda Rp300K
-Terima kasih telah memesan di TrustDigital.ID
-Contact: @TRUSTDIGITAL001 | IG: @trustdigital.indonesia
-Website: https://trustdigital.id
-
-KRITIK DAN SARAN:
-https://docs.google.com/forms/d/e/1FAIpQLScSpnLbo4ouMf2hH1rYgJi-xIdV6s8i2euLBTY9Fg1tzVrWyw/viewform?usp=header`;
-
+    const accountText = `!!! ${platformName.toUpperCase()} - TRUSTDIGITAL.ID !!!\n\n1. Login hanya di 1 DEVICE !!\n2. Garansi akun 23 Hari\n3. Ketika ada kendala akun :\n - Hapus chache app\n - (DIBACA) GUNAKAN DATA SELULER/HOTSPOT SAAT LOGIN SAJA\n - Install Ulang App\n4. Dilarang mengubah Nama profile, Pin, membuka pengaturan akun !!\n\n💌 Email: ${
+      searchResult.email
+    }\n🔑 Password: ${searchResult.password}\n👤 Profil: ${
+      firstAvailableProfile?.profile || "No available profiles"
+    }\nPIN: ${
+      firstAvailableProfile?.pin || "N/A"
+    }\nTipe: ${accountTypeFormatted}\n⏱️ Sisa hari: ${daysLeft} hari\n\nMelanggar? Akun ditarik + denda Rp300K\nTerima kasih telah memesan di TrustDigital.ID\nContact: @TRUSTDIGITAL001 | IG: @trustdigital.indonesia\nWebsite: https://trustdigital.id\n\nKRITIK DAN SARAN:\nhttps://docs.google.com/forms/d/e/1FAIpQLScSpnLbo4ouMf2hH1rYgJi-xIdV6s8i2euLBTY9Fg1tzVrWyw/viewform?usp=header`;
     navigator.clipboard.writeText(accountText);
-
     toast({
       title: "📋 Copied",
-      description: `Details for ${platformName.replace(
-        /_/g,
-        " "
-      )} account copied!`, // Ganti _ dengan spasi
+      description: `Details for ${platformName} account copied!`,
     });
   };
-  // --- AKHIR COPY TO CLIPBOARD ---
 
   const clearSearch = () => {
     setSearchTerm("");
     setSearchResult(null);
   };
 
+  // JSX Updated
   return (
     <div className="space-y-4">
-      {/* Search Form (Tetap Sama) */}
       <form onSubmit={handleSearch} className="space-y-4">
         <div className="flex space-x-2">
           <div className="relative flex-1">
             <Input
               type="text"
-              placeholder="Enter email address (partial match supported)"
+              placeholder="Enter email address..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pr-8" // Padding agar tombol clear tidak overlap
+              className="pr-8"
             />
             {searchTerm && (
               <Button
@@ -211,12 +158,10 @@ https://docs.google.com/forms/d/e/1FAIpQLScSpnLbo4ouMf2hH1rYgJi-xIdV6s8i2euLBTY9
           </Button>
         </div>
         <div className="text-xs text-gray-500">
-          💡 Tips: Partial email search supported (e.g., "budi" might find
-          "budi.susanto@email.com").
+          💡 Tips: Partial email search supported.
         </div>
       </form>
 
-      {/* --- Search Results DIPERBARUI --- */}
       {searchResult && (
         <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md border border-gray-200 dark:border-gray-700">
           <div className="flex justify-between items-start mb-3">
@@ -228,14 +173,9 @@ https://docs.google.com/forms/d/e/1FAIpQLScSpnLbo4ouMf2hH1rYgJi-xIdV6s8i2euLBTY9
               Copy Details (Formatted)
             </Button>
           </div>
-
           <div className="space-y-3 font-mono text-sm">
-            {/* Grid Layout Disesuaikan */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {/* Email */}
               <div className="md:col-span-2">
-                {" "}
-                {/* Email bisa lebih lebar */}
                 <span className="font-semibold text-gray-600 dark:text-gray-400">
                   📧 Email:
                 </span>
@@ -243,7 +183,6 @@ https://docs.google.com/forms/d/e/1FAIpQLScSpnLbo4ouMf2hH1rYgJi-xIdV6s8i2euLBTY9
                   {searchResult.email}
                 </div>
               </div>
-              {/* Password */}
               <div>
                 <span className="font-semibold text-gray-600 dark:text-gray-400">
                   🔑 Password:
@@ -252,13 +191,11 @@ https://docs.google.com/forms/d/e/1FAIpQLScSpnLbo4ouMf2hH1rYgJi-xIdV6s8i2euLBTY9
                   {searchResult.password}
                 </div>
               </div>
-              {/* Type */}
               <div>
                 <span className="font-semibold text-gray-600 dark:text-gray-400">
                   📱 Type:
                 </span>
                 <div className="mt-1">
-                  {/* Gunakan variant Badge standar */}
                   <Badge
                     variant={
                       searchResult.type === "private"
@@ -273,7 +210,7 @@ https://docs.google.com/forms/d/e/1FAIpQLScSpnLbo4ouMf2hH1rYgJi-xIdV6s8i2euLBTY9
                   </Badge>
                 </div>
               </div>
-              {/* Platform (BARU) */}
+              {/* Platform Updated */}
               <div>
                 <span className="font-semibold text-gray-600 dark:text-gray-400">
                   <span role="img" aria-label="Platform">
@@ -283,13 +220,11 @@ https://docs.google.com/forms/d/e/1FAIpQLScSpnLbo4ouMf2hH1rYgJi-xIdV6s8i2euLBTY9
                 </span>
                 <div className="mt-1">
                   <Badge variant="outline">
-                    {searchResult.platform
-                      ? searchResult.platform.replace(/_/g, " ")
-                      : "N/A"}
+                    {getPlatformDisplayName(searchResult.platform)}
                   </Badge>
                 </div>
               </div>
-              {/* Days Left */}
+              {/* End Platform Update */}
               <div>
                 <span className="font-semibold text-gray-600 dark:text-gray-400">
                   ⏰ Days Left:
@@ -299,12 +234,12 @@ https://docs.google.com/forms/d/e/1FAIpQLScSpnLbo4ouMf2hH1rYgJi-xIdV6s8i2euLBTY9
                     const daysLeft = getRemainingDays(searchResult);
                     const variant: "destructive" | "secondary" | "default" =
                       daysLeft < 0
-                        ? "destructive" // Ubah ke < 0
+                        ? "destructive"
                         : daysLeft === 0
-                        ? "secondary" // Hari ini = secondary
+                        ? "secondary"
                         : daysLeft <= 7
-                        ? "secondary" // 1-7 hari = secondary
-                        : "default"; // > 7 hari = default
+                        ? "secondary"
+                        : "default";
                     const text =
                       daysLeft < 0
                         ? `Expired (${Math.abs(daysLeft)}d ago)`
@@ -316,8 +251,7 @@ https://docs.google.com/forms/d/e/1FAIpQLScSpnLbo4ouMf2hH1rYgJi-xIdV6s8i2euLBTY9
                 </div>
               </div>
             </div>
-
-            {/* Available Profiles (Logika parsing lebih aman) */}
+            {/* Available Profiles */}
             <div>
               <span className="font-semibold text-gray-600 dark:text-gray-400">
                 👥 Available Profiles:
@@ -334,9 +268,7 @@ https://docs.google.com/forms/d/e/1FAIpQLScSpnLbo4ouMf2hH1rYgJi-xIdV6s8i2euLBTY9
                       searchResult.profiles as unknown as Profile[];
                   }
                   const available = profilesArray.filter(
-                    (
-                      p
-                    ): p is Profile => // Type guard
+                    (p): p is Profile =>
                       typeof p === "object" &&
                       p !== null &&
                       typeof p.profile === "string" &&
@@ -365,8 +297,7 @@ https://docs.google.com/forms/d/e/1FAIpQLScSpnLbo4ouMf2hH1rYgJi-xIdV6s8i2euLBTY9
                 })()}
               </div>
             </div>
-
-            {/* Used Profiles (Logika parsing lebih aman) */}
+            {/* Used Profiles */}
             {(() => {
               let profilesArray: Profile[] = [];
               if (typeof searchResult.profiles === "string") {
@@ -377,9 +308,7 @@ https://docs.google.com/forms/d/e/1FAIpQLScSpnLbo4ouMf2hH1rYgJi-xIdV6s8i2euLBTY9
                 profilesArray = searchResult.profiles as unknown as Profile[];
               }
               const used = profilesArray.filter(
-                (
-                  p
-                ): p is Profile => // Type guard
+                (p): p is Profile =>
                   typeof p === "object" &&
                   p !== null &&
                   typeof p.profile === "string" &&
@@ -387,7 +316,7 @@ https://docs.google.com/forms/d/e/1FAIpQLScSpnLbo4ouMf2hH1rYgJi-xIdV6s8i2euLBTY9
                   typeof p.used === "boolean" &&
                   p.used
               );
-              if (used.length === 0) return null; // Jangan tampilkan jika tidak ada
+              if (used.length === 0) return null;
               return (
                 <div>
                   <span className="font-semibold text-gray-600 dark:text-gray-400">
@@ -412,9 +341,6 @@ https://docs.google.com/forms/d/e/1FAIpQLScSpnLbo4ouMf2hH1rYgJi-xIdV6s8i2euLBTY9
           </div>
         </div>
       )}
-      {/* --- AKHIR Search Results --- */}
-
-      {/* Debug Info */}
       {process.env.NODE_ENV === "development" && (
         <div className="text-xs text-gray-400 p-2 bg-gray-100 dark:bg-gray-900 rounded mt-4">
           <strong>Debug Info:</strong>

@@ -1,15 +1,70 @@
 // app/api/garansi-accounts/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import { DatabaseService } from "@/lib/database-service";
-import type { AccountType, PlatformType } from "@/lib/database-service"; // Import tipe
+// Hapus PlatformType dari impor database-service
+// import { DatabaseService, AccountType, PlatformType } from '@/lib/database-service';
+import { DatabaseService, AccountType } from "@/lib/database-service"; // Impor service & AccountType
+// Impor PlatformType dari Prisma
+import { PlatformType as PrismaPlatformType } from "@prisma/client";
 
-export const runtime = "nodejs"; // Prisma needs Node.js
+export const runtime = "nodejs";
 
-// --- GET: Ambil Semua Akun Garansi ---
-export async function GET() {
+// Tipe data input untuk satu akun garansi (gunakan tipe Prisma)
+interface GaransiAccountInput {
+  email: string;
+  password: string;
+  type: AccountType; // Tipe lokal 'private'|'sharing'|'vip'
+  platform: PrismaPlatformType; // <-- Gunakan tipe Prisma
+}
+
+// Tipe payload utama
+interface GaransiBulkPayload {
+  accounts: GaransiAccountInput[];
+  expiresAt: string; // Terima string ISO
+}
+
+// --- GET: Ambil Akun Garansi (dengan filter tanggal opsional) ---
+export async function GET(req: NextRequest) {
   try {
-    const garansiAccounts = await DatabaseService.getAllGaransiAccounts();
+    const { searchParams } = new URL(req.url);
+    const dateQuery = searchParams.get("date"); // date untuk warrantyDate
+    const expiresQuery = searchParams.get("expires"); // expires untuk expiresAt
+
+    let garansiAccounts;
+
+    if (dateQuery) {
+      const searchDate = new Date(dateQuery);
+      if (isNaN(searchDate.getTime())) {
+        return NextResponse.json(
+          { error: "Invalid date format for 'date' query." },
+          { status: 400 }
+        );
+      }
+      console.log(
+        `Fetching garansi accounts by warranty date: ${searchDate.toISOString()}`
+      );
+      garansiAccounts = await DatabaseService.getGaransiAccountsByDate(
+        searchDate
+      );
+    } else if (expiresQuery) {
+      const searchExpires = new Date(expiresQuery);
+      if (isNaN(searchExpires.getTime())) {
+        return NextResponse.json(
+          { error: "Invalid date format for 'expires' query." },
+          { status: 400 }
+        );
+      }
+      console.log(
+        `Fetching garansi accounts by expires date: ${searchExpires.toISOString()}`
+      );
+      garansiAccounts = await DatabaseService.getGaransiAccountsByExpiresAt(
+        searchExpires
+      );
+    } else {
+      console.log("Fetching all garansi accounts");
+      garansiAccounts = await DatabaseService.getAllGaransiAccounts();
+    }
+
     return NextResponse.json(garansiAccounts);
   } catch (error) {
     console.error("Error fetching garansi accounts:", error);
@@ -20,54 +75,86 @@ export async function GET() {
   }
 }
 
-// --- POST: Tambah Akun Garansi Baru ---
+// --- POST: Tambah Akun Garansi Baru (Bulk) ---
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const {
-      accounts,
-      expiresAt,
-    }: {
-      accounts: {
-        email: string;
-        password: string;
-        type: AccountType;
-        platform: PlatformType; // Pastikan tipe benar
-      }[];
-      expiresAt: string; // Terima sebagai string ISO
-    } = body;
+    // Gunakan tipe payload yang sudah diperbarui
+    const { accounts, expiresAt }: GaransiBulkPayload = body;
 
-    // Validasi input dasar
-    if (
-      !accounts ||
-      !Array.isArray(accounts) ||
-      accounts.length === 0 ||
-      !expiresAt
-    ) {
+    // Validasi input
+    if (!Array.isArray(accounts) || accounts.length === 0) {
       return NextResponse.json(
-        {
-          error:
-            "Invalid input: 'accounts' array and 'expiresAt' are required.",
-        },
+        { error: "Input 'accounts' harus array dan tidak kosong." },
+        { status: 400 }
+      );
+    }
+    if (!expiresAt) {
+      return NextResponse.json(
+        { error: "Input 'expiresAt' diperlukan." },
         { status: 400 }
       );
     }
 
-    // Panggil service (service sudah mengharapkan Date object)
-    const result = await DatabaseService.addGaransiAccounts(
-      accounts,
-      new Date(expiresAt) // Konversi string ISO kembali ke Date
+    const expiresAtDate = new Date(expiresAt);
+    if (isNaN(expiresAtDate.getTime())) {
+      return NextResponse.json(
+        { error: "Format 'expiresAt' tidak valid." },
+        { status: 400 }
+      );
+    }
+
+    // Validasi tiap item (gunakan tipe GaransiAccountInput)
+    for (const acc of accounts) {
+      if (!acc.email || !acc.password || !acc.type || !acc.platform) {
+        return NextResponse.json(
+          { error: `Data akun garansi tidak lengkap: ${JSON.stringify(acc)}` },
+          { status: 400 }
+        );
+      }
+      if (!["private", "sharing", "vip"].includes(acc.type)) {
+        return NextResponse.json(
+          { error: `Tipe akun garansi tidak valid: ${acc.type}` },
+          { status: 400 }
+        );
+      }
+      // TODO: Add platform validation if needed
+    }
+
+    console.log(
+      `Attempting bulk garansi import for ${
+        accounts.length
+      } accounts, expires: ${expiresAtDate.toISOString()}`
+    );
+
+    // Panggil DatabaseService.addGaransiAccounts
+    // Tipe data 'accounts' sudah sesuai karena service mengharapkan tipe Prisma
+    const createdGaransiAccounts = await DatabaseService.addGaransiAccounts(
+      accounts, // Kirim array GaransiAccountInput
+      expiresAtDate // Kirim sebagai Date object
+    );
+
+    // service.addGaransiAccounts mengembalikan array akun yang relevan
+    const successCount = Array.isArray(createdGaransiAccounts)
+      ? createdGaransiAccounts.length
+      : 0;
+    console.log(
+      `Successfully processed/retrieved ${successCount} garansi accounts.`
     );
 
     return NextResponse.json(
-      { message: "Garansi accounts added successfully", count: result.length },
+      {
+        message: `Bulk garansi import processed. ${successCount} accounts retrieved.`,
+        // Kembalikan akun yang baru dibuat (opsional)
+        // createdAccounts: createdGaransiAccounts
+      },
       { status: 201 } // 201 Created
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error adding garansi accounts:", error);
-    // Berikan pesan error yang lebih spesifik jika memungkinkan
-    const errorMessage =
-      error instanceof Error ? error.message : "Failed to add garansi accounts";
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message || "Failed to add garansi accounts" },
+      { status: 500 }
+    );
   }
 }

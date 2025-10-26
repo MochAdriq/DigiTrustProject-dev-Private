@@ -3,86 +3,37 @@
 import { prisma } from "./prisma";
 import {
   Prisma,
-  Account, // Impor tipe Account langsung jika dibutuhkan di sini
+  Account,
   AccountType as PrismaAccountType,
-  PlatformType as PrismaPlatformType,
+  PlatformType as PrismaPlatformType, // Kita gunakan ini
 } from "@prisma/client";
-// Pastikan tipe Profile diimpor dengan benar dari lokasi definisinya
-import type { Profile } from "./database.types";
+// Impor generateProfiles dari utils
+import { generateProfiles } from "./utils";
 
-// Definisikan tipe string literal (bisa juga diimpor dari file terpisah)
+// Tipe Profile lokal (definisi ini penting karena database.types.ts dihapus)
+interface Profile {
+  profile: string;
+  pin: string;
+  used: boolean;
+}
+
+// Tipe AccountType lokal (masih dipakai sebagai string literal)
 export type AccountType = "private" | "sharing" | "vip";
-export type PlatformType =
-  | "VIDIO_DIAMOND_MOBILE"
-  | "VIU_1_BULAN"
-  | "WE_TV"
-  | "YOUTUBE_1_BULAN" // Pastikan sesuai schema
-  | "HBO"
-  | "LOKLOK"
-  | "PRIMEVIDEO"
-  | "SPOTIFY_FAMPLAN_1_BULAN"
-  | "SPOTIFY_FAMPLAN_2_BULAN"
-  | "VIDIO_PLATINUM"
-  | "CANVA_1_BULAN"
-  | "CANVA_1_TAHUN"
-  | "CHAT_GPT"
-  | "DISNEY"
-  | "NETFLIX"
-  | "CAPCUT"; // Pastikan ada di schema & generate
 
-// ============================================================
-// Helper: Generate Profiles by Account Type
-// ============================================================
-export const generateProfiles = (type: AccountType): Profile[] => {
-  // Pastikan tipe Profile sesuai { profile: string, pin: string, used: boolean }
-  const profileCounts: Record<AccountType, number> = {
-    sharing: 20,
-    private: 8,
-    vip: 6, // Pastikan sesuai schema (bukan vvip)
-  };
-  // Handle jika tipe tidak valid (meski seharusnya sudah divalidasi sebelumnya)
-  if (!profileCounts[type]) {
-    console.warn(
-      `generateProfiles called with invalid type: ${type}. Defaulting to 0 profiles.`
-    );
-    return [];
-  }
-  const pins = [
-    "1111",
-    "2222",
-    "3333",
-    "4444",
-    "5555",
-    "6666",
-    "7777",
-    "8888",
-    "9999",
-    "0000",
-  ];
+// Definisi PlatformType manual SUDAH DIHAPUS
+// Helper generateProfiles lokal SUDAH DIHAPUS
 
-  return Array.from({ length: profileCounts[type] }).map((_, i) => ({
-    profile: `Profile ${i + 1}`,
-    pin: pins[i % pins.length],
-    used: false,
-  }));
-};
-
-// ============================================================
-// Main Service Class
-// ============================================================
 export class DatabaseService {
   // ===========================
-  // 🔹 ACCOUNT CRUD
+  // 隼 ACCOUNT CRUD
   // ===========================
 
-  // Get Semua Akun Utama
   static async getAllAccounts(): Promise<Account[]> {
     return prisma.account.findMany({
       orderBy: { createdAt: "desc" },
     });
   }
 
-  // Get Akun Utama berdasarkan Tipe
   static async getAccountsByType(type: AccountType): Promise<Account[]> {
     if (!["private", "sharing", "vip"].includes(type)) {
       console.warn(`Invalid account type requested: ${type}`);
@@ -94,119 +45,193 @@ export class DatabaseService {
     });
   }
 
-  // Get Akun Utama berdasarkan Platform
+  // Gunakan PrismaPlatformType
   static async getAccountsByPlatform(
-    platform: PlatformType
+    platform: PrismaPlatformType
   ): Promise<Account[]> {
-    // TODO: Validasi platform jika daftar platform dinamis
     return prisma.account.findMany({
-      where: { platform: platform as PrismaPlatformType },
+      where: { platform: platform },
       orderBy: { createdAt: "desc" },
     });
   }
 
-  // Get Satu Akun Utama berdasarkan Email (Unique)
   static async getAccountByEmail(email: string): Promise<Account | null> {
     if (!email || typeof email !== "string") return null;
     return prisma.account.findUnique({ where: { email } });
   }
 
-  // Cari Akun Utama berdasarkan Email (Contains)
   static async searchAccountsByEmail(emailQuery: string): Promise<Account[]> {
-    const trimmedQuery = emailQuery?.trim(); // Handle null/undefined dan trim
+    const trimmedQuery = emailQuery?.trim();
     if (!trimmedQuery) return [];
-
     return prisma.account.findMany({
       where: {
-        email: {
-          contains: trimmedQuery,
-          mode: "insensitive", // Case-insensitive search
-        },
+        email: { contains: trimmedQuery, mode: "insensitive" },
       },
       orderBy: { createdAt: "desc" },
-      take: 20, // Batasi hasil pencarian
+      take: 20,
     });
   }
 
-  // Hitung Profil Tersedia per Tipe Akun Utama
+  // Fungsi dengan perbaikan JSON
   static async getAvailableProfileCount(type: AccountType): Promise<number> {
     const accountsOfType = await this.getAccountsByType(type);
     let availableCount = 0;
     accountsOfType.forEach((account) => {
-      if (Array.isArray(account.profiles)) {
-        const profilesArray = account.profiles as unknown as Profile[];
-        availableCount += profilesArray.filter(
-          (p) => typeof p === "object" && p !== null && p.used === false
-        ).length;
+      if (account.profiles) {
+        try {
+          let profilesArray: unknown;
+          if (typeof account.profiles === "string") {
+            // Tambah cek string kosong
+            if (account.profiles.trim() === "") {
+              profilesArray = [];
+            } else {
+              profilesArray = JSON.parse(account.profiles);
+            }
+          } else {
+            profilesArray = account.profiles;
+          }
+
+          if (Array.isArray(profilesArray)) {
+            // Gunakan double assertion & type guard
+            availableCount += (profilesArray as unknown as Profile[]).filter(
+              // Gunakan p: any agar properti bisa diakses
+              (p: any): p is Profile =>
+                typeof p === "object" &&
+                p !== null &&
+                typeof p.profile === "string" &&
+                typeof p.pin === "string" &&
+                typeof p.used === "boolean" &&
+                p.used === false // Filter yang belum terpakai
+            ).length;
+          } else {
+            console.warn(
+              `Profiles data for account ${account.id} is not an array:`,
+              profilesArray
+            );
+          }
+        } catch (e) {
+          console.error(
+            `Failed to parse/process profiles for account ${account.id}:`,
+            account.profiles,
+            e
+          );
+        }
       }
     });
     return availableCount;
   }
 
-  // Cek Penggunaan Customer Identifier
+  // --- PERBAIKAN #4 ---
+  // Fungsi diubah untuk mencari akun tersedia by platform DAN TIPE
+  // (Menggantikan getAvailableAccountsByPlatform)
+  static async getAvailableAccounts(
+    platform: PrismaPlatformType,
+    type: PrismaAccountType // <-- TAMBAH argumen 'type'
+  ): Promise<Account[]> {
+    console.log(
+      `[Service] Searching available accounts for platform: ${platform} AND type: ${type}`
+    );
+    const accounts = await prisma.account.findMany({
+      where: {
+        platform: platform,
+        type: type, // <-- TAMBAHKAN FILTER TYPE DI SINI
+      },
+      orderBy: { createdAt: "asc" }, // Prioritaskan akun lama
+    });
+    console.log(
+      `[Service] Found ${accounts.length} accounts total for ${platform} & ${type}. Filtering available...`
+    );
+    const availableAccounts = accounts.filter((account) => {
+      if (!account.profiles) return false;
+      try {
+        let profilesArray: unknown;
+        if (typeof account.profiles === "string") {
+          if (account.profiles.trim() === "") return false; // String kosong = tidak ada profil
+          profilesArray = JSON.parse(account.profiles);
+        } else {
+          profilesArray = account.profiles;
+        }
+        if (Array.isArray(profilesArray)) {
+          // Gunakan p: any di .some()
+          return (profilesArray as unknown as Profile[]).some(
+            (p: any): p is Profile =>
+              typeof p === "object" &&
+              p !== null &&
+              typeof p.used === "boolean" &&
+              p.used === false // Cek apakah ada yg false
+          );
+        }
+        return false; // Bukan array valid
+      } catch (e) {
+        console.error(
+          `[Service] Error parsing profiles for account ${account.id} during availability check:`,
+          e
+        );
+        return false;
+      }
+    });
+    console.log(
+      `[Service] Found ${availableAccounts.length} available accounts for ${platform} & ${type}.`
+    );
+    return availableAccounts;
+  }
+  // --- AKHIR PERBAIKAN #4 ---
+
   static async isCustomerIdentifierUsed(
     customerIdentifier: string
   ): Promise<boolean> {
     if (!customerIdentifier) return false;
     const assignment = await prisma.customerAssignment.findFirst({
       where: { customerIdentifier: customerIdentifier },
-      select: { id: true }, // Hanya butuh tahu ada atau tidak
+      select: { id: true },
     });
     return !!assignment;
   }
 
-  // Tambah Satu Akun Utama Baru
   static async addAccount(data: {
     email: string;
     password: string;
     type: AccountType;
-    platform: PlatformType;
+    platform: PrismaPlatformType;
     expiresAt?: Date;
   }): Promise<Account> {
-    // Validasi input
     if (!data.email || !data.password || !data.type || !data.platform) {
       throw new Error("Email, password, type, and platform are required.");
     }
     if (!["private", "sharing", "vip"].includes(data.type)) {
       throw new Error(`Invalid account type: ${data.type}`);
     }
-    // TODO: Validasi platform
-
-    // Pastikan email unik sebelum mencoba insert
     const existingAccount = await this.getAccountByEmail(data.email);
     if (existingAccount) {
       throw new Error(`Account with email ${data.email} already exists.`);
     }
-
     try {
       return await prisma.account.create({
         data: {
           email: data.email,
-          password: data.password, // Pertimbangkan hashing
+          password: data.password, // Ingat: plaintext
           type: data.type as PrismaAccountType,
-          platform: data.platform as PrismaPlatformType,
+          platform: data.platform,
           profiles: generateProfiles(
-            data.type
+            data.type as PrismaAccountType
           ) as unknown as Prisma.InputJsonValue,
           expiresAt:
-            data.expiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Default 30 hari
+            data.expiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           reported: false,
         },
       });
     } catch (error: any) {
       console.error("Error creating account:", error);
-      // Tangani error spesifik Prisma jika perlu
       throw new Error(`Failed to create account ${data.email}.`);
     }
   }
 
-  // Tambah Banyak Akun Utama (Bulk)
   static async addMultipleAccounts(
     accounts: {
       email: string;
       password: string;
       type: AccountType;
-      platform: PlatformType;
+      platform: PrismaPlatformType;
     }[],
     expiresAt?: Date
   ): Promise<Account[]> {
@@ -215,39 +240,33 @@ export class DatabaseService {
     }
     const defaultExpiresAt =
       expiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
     const dataToInsert = accounts.map((a) => {
-      // Validasi per item
       if (!a.email || !a.password || !a.type || !a.platform) {
-        throw new Error(
-          `Invalid account data found in array: ${JSON.stringify(a)}`
-        );
+        throw new Error(`Invalid account data in array: ${JSON.stringify(a)}`);
       }
       if (!["private", "sharing", "vip"].includes(a.type)) {
-        throw new Error(`Invalid account type found in array: ${a.type}`);
+        throw new Error(`Invalid account type in array: ${a.type}`);
       }
-      // TODO: Validasi platform
       return {
         email: a.email,
         password: a.password,
         type: a.type as PrismaAccountType,
-        platform: a.platform as PrismaPlatformType,
-        profiles: generateProfiles(a.type) as unknown as Prisma.InputJsonValue,
+        platform: a.platform,
+        profiles: generateProfiles(
+          a.type as PrismaAccountType
+        ) as unknown as Prisma.InputJsonValue,
         expiresAt: defaultExpiresAt,
         reported: false,
       };
     });
-
     try {
       const result = await prisma.account.createMany({
         data: dataToInsert,
-        skipDuplicates: true, // Sangat penting untuk bulk insert email unik
+        skipDuplicates: true,
       });
       console.log(
         `Attempted to insert ${accounts.length} accounts, ${result.count} were new.`
       );
-
-      // Kembalikan akun yang relevan (yang emailnya ada di input)
       return await prisma.account.findMany({
         where: { email: { in: accounts.map((x) => x.email) } },
         orderBy: { createdAt: "desc" },
@@ -258,38 +277,36 @@ export class DatabaseService {
     }
   }
 
-  // Update Akun Utama
   static async updateAccount(
     id: string,
     data: {
-      email?: string; // Hati-hati jika diubah
+      email?: string;
       password?: string;
       expiresAt?: Date;
-      profiles?: Profile[];
-      platform?: PlatformType;
+      profiles?: Profile[]; // Gunakan tipe Profile lokal
+      platform?: PrismaPlatformType;
     }
   ): Promise<Account | null> {
-    // Ubah return type agar bisa null jika tak ditemukan
     if (!id) throw new Error("Account ID is required for update.");
-
     const payload: Prisma.AccountUpdateInput = {};
-    if (data.email) payload.email = data.email; // Validasi unik ditangani di bawah
+    if (data.email) payload.email = data.email;
     if (data.password) payload.password = data.password;
     if (data.expiresAt) payload.expiresAt = data.expiresAt;
-    if (data.platform) payload.platform = data.platform as PrismaPlatformType; // TODO: Validasi
-    if (data.profiles)
+    if (data.platform) payload.platform = data.platform;
+    if (data.profiles && Array.isArray(data.profiles)) {
       payload.profiles = data.profiles as unknown as Prisma.InputJsonValue;
-
+    } else if (data.profiles) {
+      console.warn(
+        `Invalid profiles data received for update on account ${id}:`,
+        data.profiles
+      );
+    }
     if (Object.keys(payload).length === 0) {
       console.warn(`No valid data provided to update account ${id}.`);
-      return prisma.account.findUnique({ where: { id } }); // Kembalikan data saat ini
+      return prisma.account.findUnique({ where: { id } });
     }
-
     try {
-      return await prisma.account.update({
-        where: { id },
-        data: payload,
-      });
+      return await prisma.account.update({ where: { id }, data: payload });
     } catch (error: any) {
       console.error(`Error updating account ${id}:`, error);
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -297,12 +314,10 @@ export class DatabaseService {
           error.code === "P2002" &&
           error.meta?.target === "accounts_email_key"
         ) {
-          // Error email duplikat
           throw new Error(
             `Failed to update account: Email '${data.email}' is already in use.`
           );
         } else if (error.code === "P2025") {
-          // Error record tidak ditemukan
           throw new Error(`Account with ID ${id} not found.`);
         }
       }
@@ -310,12 +325,9 @@ export class DatabaseService {
     }
   }
 
-  // Delete Akun Utama
   static async deleteAccount(id: string): Promise<Account> {
-    // Kembalikan akun yg terhapus
     if (!id) throw new Error("Account ID is required for deletion.");
     try {
-      // Gunakan transaksi
       return await prisma.$transaction(async (tx) => {
         console.log(`Deleting relations for account ${id}...`);
         await tx.customerAssignment.deleteMany({ where: { accountId: id } });
@@ -340,48 +352,14 @@ export class DatabaseService {
   }
 
   // ===========================
-  // 🔹 GARANSI ACCOUNTS
+  // 隼 GARANSI ACCOUNTS
   // ===========================
-  static async getAllGaransiAccounts() {
-    return prisma.garansiAccount.findMany({
-      orderBy: { createdAt: "desc" },
-    });
-  }
-
-  static async getGaransiAccountsByDate(date: Date) {
-    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
-      throw new Error("Invalid date provided for searching by warranty date.");
-    }
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-    return prisma.garansiAccount.findMany({
-      where: { warrantyDate: { gte: startOfDay, lte: endOfDay } },
-      orderBy: { warrantyDate: "desc" },
-    });
-  }
-
-  static async getGaransiAccountsByExpiresAt(date: Date) {
-    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
-      throw new Error("Invalid date provided for searching by expiry date.");
-    }
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-    return prisma.garansiAccount.findMany({
-      where: { expiresAt: { gte: startOfDay, lte: endOfDay } },
-      orderBy: { expiresAt: "asc" },
-    });
-  }
-
   static async addGaransiAccounts(
     accounts: {
       email: string;
       password: string;
       type: AccountType;
-      platform: PlatformType;
+      platform: PrismaPlatformType;
     }[],
     expiresAt: Date
   ) {
@@ -394,25 +372,24 @@ export class DatabaseService {
     )
       throw new Error("Invalid or missing expiresAt date.");
     const now = new Date();
-
     const dataToInsert = accounts.map((a) => {
       if (!a.email || !a.password || !a.type || !a.platform)
         throw new Error(`Invalid garansi data: ${JSON.stringify(a)}`);
       if (!["private", "sharing", "vip"].includes(a.type))
         throw new Error(`Invalid type: ${a.type}`);
-      // TODO: Validate platform
       return {
         email: a.email,
         password: a.password,
         type: a.type as PrismaAccountType,
-        platform: a.platform as PrismaPlatformType,
-        profiles: generateProfiles(a.type) as unknown as Prisma.InputJsonValue,
+        platform: a.platform,
+        profiles: generateProfiles(
+          a.type as PrismaAccountType
+        ) as unknown as Prisma.InputJsonValue,
         expiresAt: expiresAt,
         warrantyDate: now,
         isActive: true,
       };
     });
-
     try {
       const result = await prisma.garansiAccount.createMany({
         data: dataToInsert,
@@ -428,12 +405,40 @@ export class DatabaseService {
       throw new Error("Failed to add multiple garansi accounts.");
     }
   }
+  static async getAllGaransiAccounts() {
+    return prisma.garansiAccount.findMany({ orderBy: { createdAt: "desc" } });
+  }
+  static async getGaransiAccountsByDate(date: Date) {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+      throw new Error("Invalid date for warranty search.");
+    }
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    return prisma.garansiAccount.findMany({
+      where: { warrantyDate: { gte: startOfDay, lte: endOfDay } },
+      orderBy: { warrantyDate: "desc" },
+    });
+  }
+  static async getGaransiAccountsByExpiresAt(date: Date) {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+      throw new Error("Invalid date for expiry search.");
+    }
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    return prisma.garansiAccount.findMany({
+      where: { expiresAt: { gte: startOfDay, lte: endOfDay } },
+      orderBy: { expiresAt: "asc" },
+    });
+  }
 
   // ===========================
-  // 🔹 REPORTED ACCOUNTS
+  // 隼 REPORTED ACCOUNTS
   // ===========================
   static async getAllReportedAccounts() {
-    // Kembalikan semua, filter resolved=false di client jika perlu (misal: di getReportedAccounts context)
     return prisma.reportedAccount.findMany({
       orderBy: { reportedAt: "desc" },
       include: {
@@ -443,28 +448,37 @@ export class DatabaseService {
       },
     });
   }
-
-  static async reportAccount(accountId: string, reason: string) {
+  static async reportAccount(
+    accountId: string,
+    reason: string,
+    operatorName?: string | null
+  ) {
     if (!accountId || !reason)
       throw new Error("Account ID and reason are required.");
     const account = await prisma.account.findUnique({
       where: { id: accountId },
     });
     if (!account) throw new Error(`Account with ID ${accountId} not found.`);
-
     return prisma.$transaction(async (tx) => {
       await tx.account.update({
         where: { id: accountId },
         data: { reported: true },
       });
       const report = await tx.reportedAccount.create({
-        data: { accountId, reportReason: reason },
+        data: {
+          accountId,
+          reportReason: reason,
+          operatorName: operatorName ?? "System",
+        },
       });
-      console.log(`Account ${account.email} reported: ${reason}`);
+      console.log(
+        `Account ${account.email} reported by ${
+          operatorName ?? "System"
+        }: ${reason}`
+      );
       return report;
     });
   }
-
   static async resolveReport(reportId: string, newPassword?: string) {
     if (!reportId) throw new Error("Report ID is required.");
     return prisma.$transaction(async (tx) => {
@@ -490,12 +504,11 @@ export class DatabaseService {
       console.log(
         `Report ${reportId} resolved. Account ${report.accountId} updated.`
       );
-      // Tidak perlu return apa-apa atau return boolean true
     });
   }
 
   // ===========================
-  // 🔹 CUSTOMER ASSIGNMENTS
+  // 隼 CUSTOMER ASSIGNMENTS
   // ===========================
   static async getAllCustomerAssignments() {
     return prisma.customerAssignment.findMany({
@@ -506,94 +519,133 @@ export class DatabaseService {
     });
   }
 
+  // Fungsi addCustomerAssignment dengan logika random profile & perbaikan type guard
   static async addCustomerAssignment(data: {
     customerIdentifier: string;
     accountId: string;
     accountEmail: string;
     accountType: AccountType;
-    profileName: string;
+    // profileName DIHAPUS
     operatorName?: string;
   }) {
     if (
       !data.customerIdentifier ||
       !data.accountId ||
       !data.accountEmail ||
-      !data.accountType ||
-      !data.profileName
+      !data.accountType
     ) {
-      throw new Error("Missing required fields for assignment.");
+      throw new Error("Missing fields.");
     }
     const operator = data.operatorName ?? "System";
 
     return prisma.$transaction(async (tx) => {
-      // 1. Validasi Akun & Profil
       const account = await tx.account.findUnique({
         where: { id: data.accountId },
       });
       if (!account) throw new Error(`Account ${data.accountId} not found.`);
-      if (!Array.isArray(account.profiles))
-        throw new Error(`Invalid profiles for account ${data.accountId}.`);
-      const profilesArray = account.profiles as unknown as Profile[];
-      const profileIndex = profilesArray.findIndex(
-        (p) =>
+
+      let profilesArray: unknown;
+      if (account.profiles) {
+        try {
+          if (typeof account.profiles === "string") {
+            if (account.profiles.trim() === "") profilesArray = [];
+            else profilesArray = JSON.parse(account.profiles);
+          } else {
+            profilesArray = account.profiles;
+          }
+        } catch (e) {
+          throw new Error(
+            `Invalid profiles JSON for account ${data.accountId}.`
+          );
+        }
+      } else {
+        throw new Error(`Profiles data missing.`);
+      }
+      if (!Array.isArray(profilesArray)) {
+        throw new Error(`Profiles data is not an array.`);
+      }
+
+      // Cari profil tersedia (gunakan p: any)
+      const availableProfiles = (profilesArray as unknown as Profile[]).filter(
+        (p: any): p is Profile =>
           typeof p === "object" &&
           p !== null &&
-          p.profile === data.profileName &&
-          !p.used
+          typeof p.profile === "string" &&
+          typeof p.pin === "string" &&
+          typeof p.used === "boolean" &&
+          p.used === false
       );
-      if (profileIndex === -1)
-        throw new Error(`Profile '${data.profileName}' not found or used.`);
+      if (availableProfiles.length === 0) {
+        throw new Error(`No available profiles on account ${data.accountId}.`);
+      }
 
-      // 2. Buat Assignment
+      // Pilih Profil Acak
+      const randomIndex = Math.floor(Math.random() * availableProfiles.length);
+      const selectedProfile = availableProfiles[randomIndex];
+      const selectedProfileName = selectedProfile.profile;
+      console.log(
+        `[Service] Randomly selected profile "${selectedProfileName}" for account ${data.accountId}`
+      );
+
+      // Buat Assignment
       const assignment = await tx.customerAssignment.create({
         data: {
           customerIdentifier: data.customerIdentifier,
           accountId: data.accountId,
           accountEmail: data.accountEmail,
           accountType: data.accountType as PrismaAccountType,
-          profileName: data.profileName,
+          profileName: selectedProfileName,
           operatorName: operator,
         },
       });
 
-      // 3. Catat Aktivitas
+      // Catat Aktivitas
       await tx.operatorActivity.create({
         data: {
           operatorName: operator,
-          action: `Assign profile ${data.profileName} (${data.accountType}) to ${data.customerIdentifier}`,
+          action: `Assign profile ${selectedProfileName} (${data.accountType}) to ${data.customerIdentifier}`,
           accountEmail: data.accountEmail,
           accountType: data.accountType as PrismaAccountType,
         },
       });
 
-      // 4. Update Profil jadi 'used'
-      const updatedProfiles = [...profilesArray];
-      const targetProfile = updatedProfiles[profileIndex];
-      updatedProfiles[profileIndex] = { ...targetProfile, used: true };
+      // Update Profil (gunakan p: any)
+      const profileIndexInOriginalArray = (
+        profilesArray as unknown as Profile[]
+      ).findIndex(
+        (p: any) =>
+          typeof p === "object" &&
+          p !== null &&
+          p.profile === selectedProfileName
+      );
+      if (profileIndexInOriginalArray === -1) {
+        throw new Error(
+          `Internal error: Selected profile "${selectedProfileName}" not found.`
+        );
+      }
+      const updatedProfiles = [...(profilesArray as unknown as Profile[])];
+      updatedProfiles[profileIndexInOriginalArray] = {
+        ...selectedProfile,
+        used: true,
+      };
       await tx.account.update({
         where: { id: data.accountId },
         data: { profiles: updatedProfiles as unknown as Prisma.InputJsonValue },
       });
-      console.log(
-        `Profile ${data.profileName} on account ${data.accountId} marked as used.`
-      );
 
+      console.log(
+        `Profile ${selectedProfileName} on account ${data.accountId} marked as used by operator ${operator}.`
+      );
       return assignment;
     });
   }
 
   // ===========================
-  // 🔹 OPERATOR ACTIVITIES
+  // 隼 OPERATOR ACTIVITIES & STATISTICS
   // ===========================
   static async getAllOperatorActivities() {
-    return prisma.operatorActivity.findMany({
-      orderBy: { date: "desc" }, // Urutkan terbaru dulu
-    });
+    return prisma.operatorActivity.findMany({ orderBy: { date: "desc" } });
   }
-
-  // ===========================
-  // 🔹 STATISTICS
-  // ===========================
   static async getCustomerStatistics() {
     const [
       totalAssignments,
@@ -606,7 +658,7 @@ export class DatabaseService {
       prisma.customerAssignment.groupBy({
         by: ["customerIdentifier"],
         _count: { _all: true },
-      }), // Cukup _all
+      }),
       prisma.customerAssignment.count({ where: { accountType: "private" } }),
       prisma.customerAssignment.count({ where: { accountType: "sharing" } }),
       prisma.customerAssignment.count({ where: { accountType: "vip" } }),
@@ -619,7 +671,6 @@ export class DatabaseService {
       vipAccounts,
     };
   }
-
   static async getOperatorStatistics() {
     const activities = await prisma.operatorActivity.findMany({
       orderBy: { date: "asc" },
@@ -632,7 +683,6 @@ export class DatabaseService {
       byDate: Record<string, number>;
     };
     const stats: Record<string, OperatorStats> = {};
-
     activities.forEach((activity) => {
       const name = activity.operatorName || "Unknown";
       if (!stats[name])
@@ -651,4 +701,4 @@ export class DatabaseService {
     });
     return stats;
   }
-} // <-- Penutup Class DatabaseService
+} // Akhir Class

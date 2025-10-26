@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react"; // Tambah useMemo
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -20,158 +20,109 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAccounts } from "@/contexts/account-context";
-import { Activity, Download, Filter, Search } from "lucide-react";
+import { useAccounts } from "@/contexts/account-context"; // Import context
+import {
+  Activity,
+  Download,
+  Filter,
+  Search,
+  AlertTriangle,
+} from "lucide-react"; // Tambah AlertTriangle
 import { useToast } from "@/hooks/use-toast";
 import type { DateRange } from "react-day-picker";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
+import type { OperatorActivity, AccountType } from "@prisma/client"; // Impor tipe asli dari Prisma
+import { useAuth } from "@/lib/auth"; // Impor useAuth untuk cek admin
 
-interface ActivityLog {
-  id: string;
-  timestamp: string;
-  user: string;
-  action: string;
-  target: string;
-  details: string;
-  type: "account" | "user" | "system" | "request";
-  status: "success" | "error" | "warning";
-}
+// Tipe log tidak lagi dibutuhkan
+// interface ActivityLog { ... }
 
 export default function ActivityLogs() {
-  const { customerAssignments, accounts } = useAccounts();
+  // --- GUNAKAN DATA ASLI DARI CONTEXT ---
+  const { operatorActivities, isLoading: isContextLoading } = useAccounts(); // Ambil data asli dan status loading
+  const { user: currentUser } = useAuth(); // Ambil user yg login
   const { toast } = useToast();
-  const [logs, setLogs] = useState<ActivityLog[]>([]);
-  const [filteredLogs, setFilteredLogs] = useState<ActivityLog[]>([]);
+  // --- AKHIR PENGGUNAAN CONTEXT ---
+
+  // State filter (tidak berubah)
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState<string>("all");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterType, setFilterType] = useState<string>("all"); // Tipe filter masih string 'all' | AccountType
+  // Status tidak relevan lagi untuk OperatorActivity, bisa dihapus jika mau
+  // const [filterStatus, setFilterStatus] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [currentUser, setCurrentUser] = useState<any>(null);
 
+  // State untuk loading lokal (opsional, jika ingin loading spesifik di komponen ini)
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Update loading lokal berdasarkan context loading
   useEffect(() => {
-    // Get current user from localStorage
-    const user = localStorage.getItem("currentUser");
-    if (user) {
-      setCurrentUser(JSON.parse(user));
-    }
-  }, []);
+    setIsLoading(isContextLoading);
+  }, [isContextLoading]);
 
-  // Generate activity logs from existing data
-  useEffect(() => {
-    const activityLogs: ActivityLog[] = [];
+  // --- HAPUS useEffect UNTUK SIMULASI LOG ---
+  // useEffect(() => { ... generate activity logs ... }, [customerAssignments, accounts]);
+  // --- AKHIR PENGHAPUSAN ---
 
-    // Add account request logs
-    customerAssignments.forEach((assignment) => {
-      activityLogs.push({
-        id: `request-${assignment.id}`,
-        timestamp: assignment.assigned_at,
-        user: assignment.operator_name || "Unknown",
-        action: "Account Request",
-        target: assignment.account_email,
-        details: `Requested ${assignment.account_type} account for customer ${assignment.customer_identifier}`,
-        type: "request",
-        status: "success",
-      });
-    });
+  // --- FILTER LOGS MENGGUNAKAN DATA ASLI ---
+  const filteredLogs = useMemo(() => {
+    // Gunakan useMemo agar filtering tidak berjalan setiap re-render
+    let filtered: OperatorActivity[] = Array.isArray(operatorActivities)
+      ? [...operatorActivities]
+      : [];
 
-    // Add account creation logs (simulated)
-    accounts.forEach((account) => {
-      activityLogs.push({
-        id: `create-${account.id}`,
-        timestamp: account.created_at,
-        user: "Admin",
-        action: "Account Created",
-        target: account.email,
-        details: `Created ${account.type} account with ${account.profiles.length} profiles`,
-        type: "account",
-        status: "success",
-      });
-    });
-
-    // Add system logs (simulated)
-    activityLogs.push({
-      id: "system-startup",
-      timestamp: new Date().toISOString(),
-      user: "System",
-      action: "System Startup",
-      target: "TrustDigital.ID",
-      details: "Account management system initialized",
-      type: "system",
-      status: "success",
-    });
-
-    // Sort by timestamp (newest first)
-    activityLogs.sort(
-      (a, b) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
-
-    setLogs(activityLogs);
-  }, [customerAssignments, accounts]);
-
-  // Filter logs based on search and filters
-  useEffect(() => {
-    let filtered = [...logs];
-
-    // Search filter
+    // Search filter (sesuaikan field)
     if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
       filtered = filtered.filter(
         (log) =>
-          log.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          log.target.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          log.details.toLowerCase().includes(searchTerm.toLowerCase())
+          log.operatorName.toLowerCase().includes(lowerSearch) ||
+          log.action.toLowerCase().includes(lowerSearch) ||
+          log.accountEmail.toLowerCase().includes(lowerSearch) ||
+          log.accountType.toLowerCase().includes(lowerSearch)
       );
     }
 
-    // Type filter
+    // Type filter (berdasarkan accountType)
     if (filterType !== "all") {
-      filtered = filtered.filter((log) => log.type === filterType);
+      filtered = filtered.filter((log) => log.accountType === filterType);
     }
 
-    // Status filter
-    if (filterStatus !== "all") {
-      filtered = filtered.filter((log) => log.status === filterStatus);
-    }
+    // Status filter DIHAPUS karena tidak ada di OperatorActivity
 
-    // Date range filter
+    // Date range filter (gunakan field 'date')
     if (dateRange?.from) {
       const fromDate = new Date(dateRange.from);
       fromDate.setHours(0, 0, 0, 0);
-      filtered = filtered.filter((log) => new Date(log.timestamp) >= fromDate);
+      filtered = filtered.filter((log) => new Date(log.date) >= fromDate);
     }
-
     if (dateRange?.to) {
       const toDate = new Date(dateRange.to);
       toDate.setHours(23, 59, 59, 999);
-      filtered = filtered.filter((log) => new Date(log.timestamp) <= toDate);
+      filtered = filtered.filter((log) => new Date(log.date) <= toDate);
     }
 
-    setFilteredLogs(filtered);
-  }, [logs, searchTerm, filterType, filterStatus, dateRange]);
+    // Data dari context sudah diurutkan desc by date, jadi tidak perlu sort lagi
+    return filtered;
+  }, [operatorActivities, searchTerm, filterType, dateRange]); // Dependencies filtering
+  // --- AKHIR FILTER LOGS ---
 
+  // --- EXPORT LOGS DIPERBARUI ---
   const exportLogs = () => {
     const csvContent = [
-      [
-        "Timestamp",
-        "User",
-        "Action",
-        "Target",
-        "Details",
-        "Type",
-        "Status",
-      ].join(","),
+      // Sesuaikan header
+      ["Timestamp", "Operator", "Action", "Account Email", "Account Type"].join(
+        ","
+      ),
       ...filteredLogs.map((log) =>
         [
-          new Date(log.timestamp).toLocaleString("id-ID"),
-          log.user,
+          // Sesuaikan field data
+          new Date(log.date).toLocaleString("id-ID"), // Gunakan field 'date'
+          log.operatorName,
           log.action,
-          log.target,
-          log.details.replace(/,/g, ";"), // Replace commas to avoid CSV issues
-          log.type,
-          log.status,
+          log.accountEmail,
+          log.accountType,
         ]
-          .map((field) => `"${field}"`)
+          .map((field) => `"${String(field ?? "").replace(/"/g, '""')}"`) // Handle null/undefined dan escape quotes
           .join(",")
       ),
     ].join("\n");
@@ -180,13 +131,11 @@ export default function ActivityLogs() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
 
-    let filename = "activity-logs";
-    if (dateRange?.from) {
+    let filename = "operator-activity-logs"; // Nama file lebih spesifik
+    if (dateRange?.from)
       filename += `-from-${dateRange.from.toISOString().split("T")[0]}`;
-    }
-    if (dateRange?.to) {
+    if (dateRange?.to)
       filename += `-to-${dateRange.to.toISOString().split("T")[0]}`;
-    }
     filename += ".csv";
 
     link.setAttribute("href", url);
@@ -195,82 +144,91 @@ export default function ActivityLogs() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url); // Clean up object URL
 
     toast({
       title: "Export Successful",
-      description: "Activity logs have been exported to CSV",
+      description: "Operator activity logs have been exported to CSV",
     });
   };
+  // --- AKHIR EXPORT LOGS ---
 
+  // --- Fungsi clearFilters & getStatusBadge/getTypeBadge tidak berubah ---
   const clearFilters = () => {
     setSearchTerm("");
     setFilterType("all");
-    setFilterStatus("all");
+    // setFilterStatus("all"); // Hapus status
     setDateRange(undefined);
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "success":
-        return <Badge className="bg-green-500">Success</Badge>;
-      case "error":
-        return <Badge className="bg-red-500">Error</Badge>;
-      case "warning":
-        return <Badge className="bg-yellow-500">Warning</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
+  // Fungsi getStatusBadge tidak relevan lagi
+  // const getStatusBadge = (status: string) => { ... };
 
-  const getTypeBadge = (type: string) => {
-    const colors = {
-      account: "bg-blue-500",
-      user: "bg-purple-500",
-      system: "bg-gray-500",
-      request: "bg-green-500",
+  // getAccountTypeBadge (ganti nama dari getTypeBadge)
+  const getAccountTypeBadge = (type: AccountType | string) => {
+    const colors: Record<AccountType | string, string> = {
+      // Tambah index signature
+      private: "bg-blue-500",
+      sharing: "bg-purple-500",
+      vip: "bg-yellow-500", // Sesuaikan warna VIP jika perlu
     };
     return (
-      <Badge className={colors[type as keyof typeof colors] || "bg-gray-500"}>
+      <Badge className={colors[type] || "bg-gray-500"}>
+        {" "}
+        {/* Fallback */}
         {type}
       </Badge>
     );
   };
+  // --- AKHIR FUNGSI HELPER ---
 
+  // Cek admin (tidak berubah)
   const isAdmin = currentUser?.role === "admin";
 
-  if (!isAdmin) {
+  // Tampilan jika bukan admin (tidak berubah)
+  if (!isAdmin && !isContextLoading) {
+    // Tambah cek isContextLoading agar tidak tampil prematur
     return (
       <Card>
         <CardContent className="p-6 text-center">
-          <Activity className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+          <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-gray-400" />{" "}
+          {/* Icon beda */}
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            Access Restricted
+            Akses Ditolak
           </h3>
           <p className="text-gray-500">
-            Activity logs are only available for administrators.
+            Log aktivitas hanya dapat dilihat oleh Administrator.
           </p>
         </CardContent>
       </Card>
     );
   }
 
+  // Tampilan loading (tidak berubah)
+  if (isLoading) {
+    // Atau gunakan LoadingSpinner jika ada
+    return <div className="text-center p-10">Memuat log aktivitas...</div>;
+  }
+
+  // --- TAMPILAN UTAMA (JSX) DIPERBARUI ---
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center">
           <Activity className="mr-2 h-5 w-5" />
-          Activity Logs
+          Operator Activity Logs
         </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
           {/* Filters */}
           <div className="flex flex-col md:flex-row gap-4 items-start">
+            {/* Search Input */}
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Search logs..."
+                  placeholder="Cari operator, aksi, email..." // Placeholder lebih spesifik
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -278,109 +236,114 @@ export default function ActivityLogs() {
               </div>
             </div>
 
-            <div className="flex gap-2">
+            {/* Filter Dropdowns & Buttons */}
+            <div className="flex flex-wrap gap-2">
+              {" "}
+              {/* Ganti ke flex-wrap */}
               <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Type" />
+                <SelectTrigger className="w-full sm:w-32">
+                  {" "}
+                  {/* Responsive width */}
+                  <SelectValue placeholder="Tipe Akun" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="account">Account</SelectItem>
-                  <SelectItem value="user">User</SelectItem>
-                  <SelectItem value="system">System</SelectItem>
-                  <SelectItem value="request">Request</SelectItem>
+                  <SelectItem value="all">Semua Tipe</SelectItem>
+                  <SelectItem value="private">Private</SelectItem>
+                  <SelectItem value="sharing">Sharing</SelectItem>
+                  <SelectItem value="vip">VIP</SelectItem>
                 </SelectContent>
               </Select>
-
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="success">Success</SelectItem>
-                  <SelectItem value="error">Error</SelectItem>
-                  <SelectItem value="warning">Warning</SelectItem>
-                </SelectContent>
-              </Select>
-
+              {/* Hapus Select Status */}
+              {/* <Select value={filterStatus} onValueChange={setFilterStatus}>...</Select> */}
               <DateRangePicker
                 value={dateRange}
                 onChange={setDateRange}
-                placeholder="Filter by date"
+                placeholder="Filter tanggal" // Responsive width
               />
-
-              {(searchTerm ||
-                filterType !== "all" ||
-                filterStatus !== "all" ||
-                dateRange) && (
+              {(searchTerm || filterType !== "all" || dateRange) && ( // Update kondisi clear
                 <Button variant="outline" onClick={clearFilters} size="sm">
-                  <Filter className="h-4 w-4 mr-2" />
-                  Clear
+                  <Filter className="h-4 w-4 mr-1 sm:mr-2" />{" "}
+                  {/* Margin responsive */}
+                  <span className="hidden sm:inline">Clear</span>{" "}
+                  {/* Teks di layar besar */}
                 </Button>
               )}
-
               <Button
                 onClick={exportLogs}
                 className="bg-blue-600 hover:bg-blue-700"
+                size="sm" // Samakan ukuran tombol
               >
-                <Download className="h-4 w-4 mr-2" />
-                Export
+                <Download className="h-4 w-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Export</span>
               </Button>
             </div>
           </div>
 
-          {/* Results summary */}
+          {/* Results summary (gunakan data asli) */}
           <div className="text-sm text-gray-500">
-            Showing {filteredLogs.length} of {logs.length} activities
+            {/* Total log dari context, filtered dari useMemo */}
+            Menampilkan {filteredLogs.length} dari{" "}
+            {operatorActivities?.length || 0} aktivitas
           </div>
 
-          {/* Logs table */}
-          <div className="overflow-x-auto">
+          {/* Logs table (sesuaikan kolom) */}
+          <div className="overflow-x-auto border rounded-md">
+            {" "}
+            {/* Tambah border */}
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-gray-50">
+                {" "}
+                {/* Header dengan background */}
                 <TableRow>
-                  <TableHead>Timestamp</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Target</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Details</TableHead>
+                  <TableHead className="w-[150px]">Timestamp</TableHead>{" "}
+                  {/* Lebar tetap */}
+                  <TableHead>Operator</TableHead>
+                  <TableHead className="min-w-[250px]">Action</TableHead>{" "}
+                  {/* Lebar minimum */}
+                  <TableHead>Account Email</TableHead>
+                  <TableHead>Account Type</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredLogs.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
-                      className="text-center py-4 text-gray-500"
+                      colSpan={5} // Sesuaikan colSpan
+                      className="text-center py-8 text-gray-500" // Padding lebih besar
                     >
-                      No activity logs found
+                      Tidak ada log aktivitas yang cocok dengan filter.
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredLogs.map((log) => (
-                    <TableRow key={log.id} className="hover:bg-gray-50">
-                      <TableCell className="text-sm">
-                        {new Date(log.timestamp).toLocaleString("id-ID", {
+                    <TableRow key={log.id} className="hover:bg-gray-50 text-sm">
+                      {" "}
+                      {/* Ukuran font */}
+                      <TableCell>
+                        {new Date(log.date).toLocaleString("id-ID", {
+                          // Format lengkap
                           day: "2-digit",
-                          month: "2-digit",
+                          month: "short",
                           year: "numeric",
                           hour: "2-digit",
                           minute: "2-digit",
+                          second: "2-digit",
                         })}
                       </TableCell>
-                      <TableCell className="font-medium">{log.user}</TableCell>
-                      <TableCell>{log.action}</TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {log.target}
+                      <TableCell className="font-medium">
+                        {log.operatorName}
                       </TableCell>
-                      <TableCell>{getTypeBadge(log.type)}</TableCell>
-                      <TableCell>{getStatusBadge(log.status)}</TableCell>
-                      <TableCell className="max-w-xs truncate text-sm text-gray-600">
-                        {log.details}
+                      <TableCell className="whitespace-normal">
+                        {log.action}
+                      </TableCell>{" "}
+                      {/* Allow wrap */}
+                      <TableCell className="font-mono">
+                        {log.accountEmail}
                       </TableCell>
+                      <TableCell>
+                        {getAccountTypeBadge(log.accountType)}
+                      </TableCell>
+                      {/* Hapus kolom Status & Details */}
                     </TableRow>
                   ))
                 )}
@@ -391,4 +354,5 @@ export default function ActivityLogs() {
       </CardContent>
     </Card>
   );
+  // --- AKHIR TAMPILAN UTAMA ---
 }

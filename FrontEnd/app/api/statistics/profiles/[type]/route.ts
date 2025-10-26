@@ -1,50 +1,50 @@
 // app/api/statistics/profiles/[type]/route.ts
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { DatabaseService, AccountType } from "@/lib/database-service";
 
-export const runtime = "nodejs";
-
-// Params type needed for route segments
-type Params = {
-  type: string; // The dynamic part [type] from the folder name
-};
-
+/**
+ * --------------------------------------------------------------------------------
+ * 🔹 GET /api/statistics/profiles/[type]
+ * --------------------------------------------------------------------------------
+ * Endpoint untuk mendapatkan jumlah profil yang tersedia (used: false)
+ * untuk tipe akun tertentu secara real-time dari database.
+ *
+ * @param { params: { type: AccountType } } - Tipe akun ('private', 'sharing', 'vip').
+ * @returns { NextResponse<{ count: number }> } - Jumlah profil tersedia atau error.
+ */
 export async function GET(
-  req: NextRequest,
-  { params }: { params: Params } // Destructure params here
+  request: Request,
+  { params }: { params: { type: AccountType } } // Gunakan tipe AccountType
 ) {
   try {
-    const accountType = params.type as AccountType; // Get type from URL segment
+    const { type } = params;
 
-    // Validasi tipe akun
-    if (
-      accountType !== "private" &&
-      accountType !== "sharing" &&
-      accountType !== "vip"
-    ) {
+    // 1. Validasi tipe
+    if (!type || !["private", "sharing", "vip"].includes(type)) {
       return NextResponse.json(
-        {
-          error:
-            "Invalid account type provided. Use 'private', 'sharing', or 'vip'.",
-        },
-        { status: 400 }
+        { error: "Invalid or missing account type parameter." },
+        { status: 400 } // Bad Request
       );
     }
 
-    // Panggil fungsi service di server
-    const count = await DatabaseService.getAvailableProfileCount(accountType);
+    console.log(`[API] Calculating available profile count for type: ${type}`);
 
-    // Kembalikan hanya jumlahnya
-    return NextResponse.json({ count });
-  } catch (error) {
+    // 2. Panggil DatabaseService.getAvailableProfileCount
+    const count = await DatabaseService.getAvailableProfileCount(type);
+
+    console.log(`[API] Available ${type} profiles: ${count}`);
+
+    // 3. Kembalikan hasil
+    return NextResponse.json({ count: count }, { status: 200 }); // OK
+  } catch (error: any) {
     console.error(
-      `Error fetching available profile count for ${params.type}:`,
-      error
+      `❌ [API] GET /api/statistics/profiles/${params.type} error:`,
+      error.message
     );
     return NextResponse.json(
-      { error: `Failed to fetch profile count for ${params.type}` },
-      { status: 500 }
+      { error: "Failed to calculate available profiles." },
+      { status: 500 } // Internal Server Error
     );
   }
 }

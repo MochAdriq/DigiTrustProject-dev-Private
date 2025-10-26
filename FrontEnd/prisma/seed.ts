@@ -1,185 +1,209 @@
-import { PrismaClient } from "@prisma/client";
+// prisma/seed.ts
+
+import {
+  PrismaClient,
+  Prisma,
+  AccountType,
+  PlatformType,
+  User,
+} from "@prisma/client";
+// Sesuaikan path '../lib/utils' jika file utils.ts ada di lokasi berbeda
+import { generateProfiles } from "../lib/utils";
 
 const prisma = new PrismaClient();
 
-// Helper function to generate profiles
-const generateProfiles = (
-  type: "private" | "sharing",
-  customCount?: number
-) => {
-  const defaultCount = type === "private" ? 8 : 20;
-  const count = customCount || defaultCount;
-  const profiles = [];
-
-  const profilePatterns = [
-    { profile: "Profile A", pin: "1111", used: false },
-    { profile: "Profile B", pin: "2222", used: false },
-    { profile: "Profile C", pin: "3333", used: false },
-    { profile: "Profile D", pin: "4444", used: false },
-    { profile: "Profile E", pin: "5555", used: false },
-    { profile: "Profile F", pin: "6666", used: false },
-    { profile: "Profile G", pin: "7777", used: false },
-    { profile: "Profile H", pin: "8888", used: false },
-    { profile: "Profile I", pin: "9999", used: false },
-    { profile: "Profile J", pin: "0000", used: false },
-    { profile: "Profile K", pin: "1234", used: false },
-    { profile: "Profile L", pin: "5678", used: false },
-    { profile: "Profile M", pin: "9012", used: false },
-    { profile: "Profile N", pin: "3456", used: false },
-    { profile: "Profile O", pin: "7890", used: false },
-    { profile: "Profile P", pin: "2468", used: false },
-    { profile: "Profile Q", pin: "1357", used: false },
-    { profile: "Profile R", pin: "9753", used: false },
-    { profile: "Profile S", pin: "8642", used: false },
-    { profile: "Profile T", pin: "1470", used: false },
-  ];
-
-  for (let i = 0; i < count; i++) {
-    const patternIndex = i % profilePatterns.length;
-    profiles.push(profilePatterns[patternIndex]);
-  }
-
-  return profiles;
+// Helper function to create Date objects relative to now
+const daysFromNow = (days: number): Date => {
+  const date = new Date(); // Gets the current date and time
+  date.setDate(date.getDate() + days);
+  return date;
 };
 
-// Helper function to calculate expiration date (23 days from creation)
-const calculateExpirationDate = (creationDate: Date): Date => {
-  const expirationDate = new Date(creationDate);
-  expirationDate.setDate(expirationDate.getDate() + 23);
-  return expirationDate;
+// Helper function to create Date 1 year from now
+const oneYearFromNow = (): Date => {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() + 1);
+  return date;
 };
+
+// Helper interface for Profile (matching utils.ts and schema needs)
+interface Profile {
+  profile: string;
+  pin: string;
+  used: boolean;
+}
 
 async function main() {
-  console.log("🌱 Starting database seed...");
+  console.log(`🌱 Start seeding ...`);
 
-  // Create admin user from README.md
-  const adminUser = await prisma.user.upsert({
+  // ==========================
+  // 1. Seed Users
+  // ==========================
+  console.log(`👤 Seeding users...`);
+  // (User data remains the same)
+  await prisma.user.upsert({
     where: { username: "admin" },
-    update: {
-      password: "admin123", // In production, hash this password
-    },
+    update: {},
     create: {
       username: "admin",
-      password: "admin123", // In production, hash this password
+      name: "Administrator Utama",
+      password: "TrustDigital2024!",
       role: "admin",
     },
   });
-
-  // Create operator user from README.md
-  const operatorUser = await prisma.user.upsert({
-    where: { username: "operator" },
-    update: {
-      password: "operator123", // In production, hash this password
-    },
+  await prisma.user.upsert({
+    where: { username: "operator1" },
+    update: {},
     create: {
-      username: "operator",
-      password: "operator123", // In production, hash this password
+      username: "operator1",
+      name: "Operator Satu",
+      password: "Operator123!",
       role: "operator",
     },
   });
+  console.log(`👤 Users seeded: admin, operator1`);
 
-  console.log("👤 Created users:", { adminUser, operatorUser });
+  // ===========================================
+  // 2. Seed Accounts (Main Stock) - Adjusted expiresAt
+  // ===========================================
+  console.log(`💼 Seeding main accounts with adjusted expiration dates...`);
 
-  // Hapus user 'operator1' jika ada
-  try {
-    await prisma.user.delete({ where: { username: "operator1" } });
-    console.log("🗑️ Deleted old 'operator1' user.");
-  } catch (error) {
-    // Abaikan jika user tidak ada
+  const allPlatforms = Object.values(PlatformType);
+  const allAccountTypes = Object.values(AccountType);
+  const accountsToCreate: Prisma.AccountCreateManyInput[] = [];
+  let accountCounter = 0;
+
+  for (const platform of allPlatforms) {
+    for (const type of allAccountTypes) {
+      for (let i = 1; i <= 3; i++) {
+        const email = `${platform.toLowerCase()}_${type}_${i}@seed.example.com`;
+        const password = `pass${i}`;
+        let expiresAtDate: Date;
+
+        // --- Adjust expiresAt based on platform name ---
+        if (platform.includes("_1_TAHUN")) {
+          expiresAtDate = oneYearFromNow(); // Tepat 1 tahun dari sekarang
+        } else if (platform.includes("_2_BULAN")) {
+          expiresAtDate = daysFromNow(60); // Tepat 60 hari (sekitar 2 bulan)
+        } else if (platform.includes("_1_BULAN")) {
+          expiresAtDate = daysFromNow(30); // Tepat 30 hari
+        } else {
+          // Default for platforms without specific duration in name
+          expiresAtDate = daysFromNow(30 + (accountCounter % 30)); // Variasi default 30-59 hari
+        }
+        // --- End Adjustment ---
+
+        accountsToCreate.push({
+          email: email,
+          password: password,
+          type: type,
+          platform: platform,
+          profiles: generateProfiles(type) as unknown as Prisma.InputJsonValue,
+          expiresAt: expiresAtDate, // Gunakan expiresAtDate yang sudah disesuaikan
+          reported: false,
+        });
+        accountCounter++;
+      }
+    }
+    console.log(`   - Prepared 9 main accounts for platform: ${platform}`);
   }
 
-  // Create sample accounts
-  const now = new Date();
-
-  const sampleAccounts = [
-    {
-      email: "netflix1@example.com",
-      password: "password123",
-      type: "private",
-      profiles: generateProfiles("private"),
-      createdAt: now,
-      expiresAt: calculateExpirationDate(now),
-      isGaransiOnly: false,
-    },
-    {
-      email: "netflix2@example.com",
-      password: "password456",
-      type: "sharing",
-      profiles: generateProfiles("sharing"),
-      createdAt: now,
-      expiresAt: calculateExpirationDate(now),
-      isGaransiOnly: false,
-    },
-    {
-      email: "netflix3@example.com",
-      password: "password789",
-      type: "private",
-      profiles: generateProfiles("private"),
-      createdAt: now,
-      expiresAt: calculateExpirationDate(now),
-      isGaransiOnly: false,
-    },
-  ];
-
-  for (const accountData of sampleAccounts) {
-    await prisma.account.upsert({
-      where: { email: accountData.email },
-      update: {},
-      create: accountData as any,
+  if (accountsToCreate.length > 0) {
+    console.log(
+      `💼 Attempting to create ${accountsToCreate.length} main accounts...`
+    );
+    const result = await prisma.account.createMany({
+      data: accountsToCreate,
+      skipDuplicates: true,
     });
+    console.log(`💼 Successfully created ${result.count} new main accounts.`);
+  } else {
+    console.log("💼 No main accounts generated to seed.");
   }
 
-  console.log("📦 Created sample accounts");
+  // ===========================================
+  // 3. Seed Garansi Accounts (warrantyDate = today, expiresAt adjusted)
+  // ===========================================
+  console.log(`🛡️ Seeding garansi accounts...`);
 
-  // Create sample garansi accounts
-  const warrantyDate = new Date();
-  warrantyDate.setDate(warrantyDate.getDate() - 7); // 7 days ago
+  const garansiAccountsToCreate: Prisma.GaransiAccountCreateManyInput[] = [];
+  const today = new Date(); // Tanggal hari ini
+  let garansiCounter = 0; // Counter terpisah untuk variasi default garansi
 
-  const sampleGaransiAccounts = [
-    {
-      email: "garansi1@example.com",
-      password: "garansi123",
-      type: "private",
-      profiles: generateProfiles("private"),
-      createdAt: warrantyDate,
-      expiresAt: calculateExpirationDate(warrantyDate),
-      warrantyDate: warrantyDate,
-    },
-    {
-      email: "garansi2@example.com",
-      password: "garansi456",
-      type: "sharing",
-      profiles: generateProfiles("sharing"),
-      createdAt: warrantyDate,
-      expiresAt: calculateExpirationDate(warrantyDate),
-      warrantyDate: warrantyDate,
-    },
-  ];
+  for (const platform of allPlatforms) {
+    for (const type of allAccountTypes) {
+      // 1 akun per tipe untuk setiap platform
+      const email = `garansi_${platform.toLowerCase()}_${type}@seed.example.com`;
+      const password = `g_pass_${type}`;
+      let garansiExpiresAtDate: Date;
 
-  for (const garansiData of sampleGaransiAccounts) {
-    await prisma.garansiAccount.upsert({
-      where: {
-        email_warrantyDate: {
-          email: garansiData.email,
-          warrantyDate: garansiData.warrantyDate,
-        },
-      },
-      update: {},
-      create: garansiData as any,
+      // --- Adjust expiresAt for Garansi based on platform name ---
+      if (platform.includes("_1_TAHUN")) {
+        garansiExpiresAtDate = oneYearFromNow(); // Tepat 1 tahun dari sekarang
+      } else if (platform.includes("_2_BULAN")) {
+        garansiExpiresAtDate = daysFromNow(60); // Tepat 60 hari
+      } else if (platform.includes("_1_BULAN")) {
+        garansiExpiresAtDate = daysFromNow(30); // Tepat 30 hari
+      } else {
+        // Default for platforms without specific duration in name
+        // Kita buat sedikit variasi agar tidak semua sama persis
+        garansiExpiresAtDate = daysFromNow(30 + (garansiCounter % 5)); // Variasi 30-34 hari
+      }
+      // --- End Adjustment ---
+
+      garansiAccountsToCreate.push({
+        email: email,
+        password: password,
+        type: type,
+        platform: platform,
+        profiles: generateProfiles(type) as unknown as Prisma.InputJsonValue,
+        expiresAt: garansiExpiresAtDate, // Gunakan tanggal expired yg disesuaikan
+        warrantyDate: today, // Tanggal garansi tetap hari ini
+        isActive: true,
+      });
+      garansiCounter++;
+    }
+    console.log(`   - Prepared 3 garansi accounts for platform: ${platform}`);
+  }
+
+  if (garansiAccountsToCreate.length > 0) {
+    console.log(
+      `🛡️ Attempting to create ${garansiAccountsToCreate.length} garansi accounts...`
+    );
+    const result = await prisma.garansiAccount.createMany({
+      data: garansiAccountsToCreate,
+      skipDuplicates: true,
     });
+    console.log(
+      `🛡️ Successfully created ${result.count} new garansi accounts.`
+    );
+  } else {
+    console.log("🛡️ No garansi accounts generated to seed.");
   }
 
-  console.log("🛡️ Created sample garansi accounts");
+  // ================================================================
+  // Opsional: Seed tabel lain (Reported, Assignment, Activity)
+  // ================================================================
+  console.log(
+    `📝 Skipping seeding for ReportedAccount, CustomerAssignment, OperatorActivity.`
+  );
 
-  console.log("✅ Database seed completed!");
+  console.log(`✅ Seeding finished.`);
 }
 
 main()
-  .then(async () => {
-    await prisma.$disconnect();
-  })
-  .catch(async (e) => {
-    console.error("❌ Seed error:", e);
-    await prisma.$disconnect();
+  .catch((e) => {
+    console.error("❌ Error during seeding:", e);
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      console.error("Prisma Error Code:", e.code);
+      console.error("Prisma Error Meta:", e.meta);
+    }
+    if (e instanceof Prisma.PrismaClientValidationError) {
+      console.error("Prisma Validation Error:", e.message);
+    }
     process.exit(1);
+  })
+  .finally(async () => {
+    console.log("🔌 Disconnecting Prisma Client...");
+    await prisma.$disconnect();
   });

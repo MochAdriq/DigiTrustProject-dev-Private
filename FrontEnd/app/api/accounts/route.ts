@@ -1,11 +1,11 @@
 // app/api/accounts/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import {
-  DatabaseService,
-  AccountType,
-  PlatformType,
-} from "@/lib/database-service"; // Import tipe juga
+// Hapus PlatformType dari impor database-service
+// import { DatabaseService, AccountType, PlatformType } from "@/lib/database-service";
+import { DatabaseService, AccountType } from "@/lib/database-service"; // Impor service & AccountType
+// Impor PlatformType dari Prisma
+import { PlatformType as PrismaPlatformType } from "@prisma/client";
 
 export const runtime = "nodejs"; // Prisma needs Node.js
 
@@ -13,15 +13,13 @@ export const runtime = "nodejs"; // Prisma needs Node.js
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const accountType = searchParams.get("type") as AccountType | null; // Ambil query param 'type'
+    const accountType = searchParams.get("type") as AccountType | null;
 
     let accounts;
     if (accountType && ["private", "sharing", "vip"].includes(accountType)) {
-      // Jika ada filter type yang valid, panggil getAccountsByType
       console.log(`Fetching accounts with type: ${accountType}`);
       accounts = await DatabaseService.getAccountsByType(accountType);
     } else {
-      // Jika tidak ada filter atau filter tidak valid, ambil semua
       console.log("Fetching all accounts (no valid type filter)");
       accounts = await DatabaseService.getAllAccounts();
     }
@@ -41,19 +39,19 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // Ambil semua data yang dibutuhkan oleh DatabaseService.addAccount
+    // Terima data dengan tipe dari Prisma
     const {
       email,
       password,
       type,
       platform,
-      expiresAt, // Ini bisa string ISO date dari client
+      expiresAt, // string ISO date
     }: {
       email: string;
       password: string;
-      type: AccountType;
-      platform: PlatformType;
-      expiresAt?: string; // Terima sebagai string, bisa undefined
+      type: AccountType; // Tipe lokal 'private'|'sharing'|'vip'
+      platform: PrismaPlatformType; // <-- Gunakan tipe Prisma
+      expiresAt?: string;
     } = body;
 
     // Validasi input
@@ -72,9 +70,8 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    // TODO: Tambahkan validasi untuk platform jika perlu
+    // TODO: Add platform validation if needed
 
-    // Konversi expiresAt string ke Date object jika ada
     const expiresAtDate = expiresAt ? new Date(expiresAt) : undefined;
     if (expiresAtDate && isNaN(expiresAtDate.getTime())) {
       return NextResponse.json(
@@ -84,21 +81,20 @@ export async function POST(req: NextRequest) {
     }
 
     // Panggil DatabaseService.addAccount
-    // Fungsi ini sudah otomatis generate profiles
+    // Tipe platform sudah sesuai
     const newAccount = await DatabaseService.addAccount({
       email,
       password,
       type,
-      platform,
-      expiresAt: expiresAtDate, // Kirim Date object atau undefined
+      platform, // Kirim tipe Prisma
+      expiresAt: expiresAtDate,
     });
 
-    return NextResponse.json(newAccount, { status: 201 }); // 201 Created
+    return NextResponse.json(newAccount, { status: 201 });
   } catch (error: any) {
     console.error("Error adding main account:", error);
-    // Handle error spesifik (misal email duplikat dari service)
     if (error.message.includes("already exists")) {
-      return NextResponse.json({ error: error.message }, { status: 409 }); // 409 Conflict
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
     return NextResponse.json(
       { error: error.message || "Failed to add main account" },

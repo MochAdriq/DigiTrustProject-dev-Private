@@ -86,8 +86,10 @@ model ReportedAccount {
   id           String   @id @default(uuid())
   accountId    String   @map("account_id")
   reportReason String   @map("report_reason")
-  reportedAt   DateTime @default(now()) @map("reported_at")
+  reportedAt   DateTime @default(now()) @map("reported_at") 
   resolved     Boolean  @default(false)
+
+  operatorName String?  @map("operator_name") // <-- TAMBAHKAN INI
 
   // Relations
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)

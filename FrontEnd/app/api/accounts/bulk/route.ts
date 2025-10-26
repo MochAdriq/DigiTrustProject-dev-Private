@@ -1,27 +1,30 @@
+// app/api/accounts/bulk/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
-import {
-  DatabaseService,
-  AccountType,
-  PlatformType,
-} from "@/lib/database-service";
-import { Prisma } from "@prisma/client";
+// Hapus PlatformType dari impor database-service
+// import { DatabaseService, AccountType, PlatformType } from "@/lib/database-service";
+import { DatabaseService, AccountType } from "@/lib/database-service"; // Impor service & AccountType
+// Impor Prisma untuk error handling dan PlatformType
+import { Prisma, PlatformType as PrismaPlatformType } from "@prisma/client";
 
 export const runtime = "nodejs"; // Prisma needs Node.js
 
-// Tipe data yang diharapkan dari body request
+// Tipe data yang diharapkan dari body request (gunakan tipe Prisma)
+interface AccountInput {
+  email: string;
+  password: string;
+  type: AccountType; // Tipe AccountType lokal ('private' | 'sharing' | 'vip')
+  platform: PrismaPlatformType; // <-- Gunakan tipe Prisma
+}
 interface BulkImportPayload {
-  accounts: {
-    email: string;
-    password: string;
-    type: AccountType;
-    platform: PlatformType;
-  }[];
+  accounts: AccountInput[];
   expiresAt: string; // Terima sebagai string ISO date
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    // Gunakan tipe yang sudah diperbarui
     const { accounts, expiresAt }: BulkImportPayload = body;
 
     // --- Validasi Input ---
@@ -40,7 +43,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Konversi dan validasi tanggal expiresAt
     const expiresAtDate = new Date(expiresAt);
     if (isNaN(expiresAtDate.getTime())) {
       return NextResponse.json(
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validasi setiap item dalam array accounts (opsional tapi bagus)
+    // Validasi setiap item (gunakan tipe AccountInput)
     for (const acc of accounts) {
       if (!acc.email || !acc.password || !acc.type || !acc.platform) {
         return NextResponse.json(
@@ -68,7 +70,8 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
-      // TODO: Tambahkan validasi platform jika perlu
+      // TODO: Tambahkan validasi platform jika enum Prisma tidak cukup
+      // Misalnya cek apakah acc.platform ada di Object.values(PrismaPlatformType)
     }
     // --- Akhir Validasi Input ---
 
@@ -79,15 +82,12 @@ export async function POST(req: NextRequest) {
     );
 
     // Panggil DatabaseService.addMultipleAccounts
-    // Fungsi ini sudah menghandle generateProfiles dan skipDuplicates
+    // Tipe data 'accounts' sudah sesuai karena service mengharapkan tipe Prisma
     const createdAccounts = await DatabaseService.addMultipleAccounts(
-      accounts,
+      accounts, // Kirim array AccountInput
       expiresAtDate // Kirim sebagai Date object
     );
 
-    // Berapa banyak yang benar-benar baru ditambahkan (karena skipDuplicates)
-    // Kita bisa cek perbedaan panjang array input vs output, atau lihat log dari service
-    // Untuk response, kita kembalikan saja jumlah yang berhasil di-query kembali
     const successCount = createdAccounts.length;
     console.log(
       `Successfully processed/retrieved ${successCount} accounts after bulk operation.`
@@ -96,18 +96,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         message: `Bulk import processed. ${successCount} accounts relevant to this batch were retrieved.`,
-        // Note: successCount might be less than accounts.length if duplicates were skipped
-        // or if findMany has issues retrieving immediately after createMany (less likely)
         processedCount: successCount,
       },
-      { status: 201 } // 201 Created (atau 200 OK jika lebih cocok)
+      { status: 201 }
     );
   } catch (error: any) {
     console.error("Error during bulk account import:", error);
-    // Handle error spesifik jika perlu (misal: validasi gagal di service)
     return NextResponse.json(
       { error: error.message || "Failed to process bulk import" },
-      { status: 500 } // Internal Server Error
+      { status: 500 }
     );
   }
 }

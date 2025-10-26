@@ -8,14 +8,12 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { useAccounts } from "@/contexts/account-context";
-// Impor tipe dari service
-import type { AccountType, PlatformType } from "@/lib/database-service";
-import {
-  AlertCircle,
-  Info,
-  Package,
-  Calendar as CalendarIcon,
-} from "lucide-react";
+// Import types from Prisma
+import type {
+  AccountType,
+  PlatformType as PrismaPlatformType,
+} from "@prisma/client";
+import { AlertCircle, Package, Calendar as CalendarIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -25,7 +23,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-// Impor untuk Kalender
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
   Popover,
@@ -34,47 +31,26 @@ import {
 } from "@/components/ui/popover";
 import { format, addDays } from "date-fns";
 import { cn } from "@/lib/utils";
+// Import constants for dropdown
+import { PLATFORM_LIST } from "@/lib/constants";
 
-// --- OPSI PLATFORM (Sama seperti di form lain) ---
-const platformOptions: { value: PlatformType; label: string }[] = [
-  { value: "NETFLIX", label: "Netflix" },
-  { value: "DISNEY", label: "Disney+" },
-  { value: "HBO", label: "HBO Go" },
-  { value: "PRIMEVIDEO", label: "Prime Video" },
-  { value: "VIDIO_DIAMOND_MOBILE", label: "Vidio Diamond Mobile" },
-  { value: "VIDIO_PLATINUM", label: "Vidio Platinum" },
-  { value: "VIU_1_BULAN", label: "Viu (1 Bulan)" },
-  { value: "WE_TV", label: "WeTV" },
-  { value: "YOUTUBE_1_BULAN", label: "YouTube (1 Bulan)" },
-  { value: "LOKLOK", label: "LokLok" },
-  { value: "SPOTIFY_FAMPLAN_1_BULAN", label: "Spotify 1 Bulan" },
-  { value: "SPOTIFY_FAMPLAN_2_BULAN", label: "Spotify 2 Bulan" },
-  { value: "CANVA_1_BULAN", label: "Canva (1 Bulan)" },
-  { value: "CANVA_1_TAHUN", label: "Canva (1 Tahun)" },
-  { value: "CHAT_GPT", label: "Chat GPT" },
-  { value: "CAPCUT", label: "Capcut" },
-];
-// --- AKHIR OPSI PLATFORM ---
-
-// Helper jumlah profil default
+// Helper profile count (no change)
 const getDefaultProfileCount = (type: AccountType): number => {
   if (type === "private") return 8;
   if (type === "sharing") return 20;
-  if (type === "vip") return 6; // Ganti vvip jadi vip
-  return 8; // Default fallback
+  if (type === "vip") return 6;
+  return 8;
 };
 
 export default function BulkImport() {
   const { toast } = useToast();
-  // Ambil fungsi addAccounts dari context
-  // Pastikan fungsi ini di context sudah diupdate untuk memanggil API Bulk
   const { addAccounts } = useAccounts();
   const [emails, setEmails] = useState("");
   const [accountType, setAccountType] = useState<AccountType>("private");
-  const [platform, setPlatform] = useState<PlatformType | "">(""); // State Platform BARU
+  const [platform, setPlatform] = useState<PrismaPlatformType | "">(""); // Use Prisma type
   const [expiresAt, setExpiresAt] = useState<Date | undefined>(
     addDays(new Date(), 30)
-  ); // State ExpiresAt BARU
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sharedPassword, setSharedPassword] = useState("");
@@ -86,58 +62,50 @@ export default function BulkImport() {
     setAccountType(type);
   };
 
+  // handleSubmit (ensure platform cast is correct)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-
     try {
       const lines = emails
         .split("\n")
         .map((line) => line.trim())
         .filter((line) => line.length > 0);
-
       if (lines.length === 0)
         throw new Error("Masukkan setidaknya satu data akun.");
       if (!platform) throw new Error("Platform harus dipilih.");
       if (!expiresAt) throw new Error("Tanggal kadaluarsa harus dipilih.");
-
       const finalSharedPassword = sharedPassword.trim();
       if (inputMode === "email_only" && !finalSharedPassword) {
-        throw new Error(
-          "Masukkan shared password untuk mode input email saja."
-        );
+        throw new Error("Masukkan shared password.");
       }
-
       const accountsToAdd: {
         email: string;
         password: string;
         type: AccountType;
-        platform: PlatformType;
+        platform: PrismaPlatformType;
       }[] = [];
       let parseErrorLine: string | null = null;
-
       lines.forEach((line) => {
         if (parseErrorLine) return;
         let email = "";
         let linePassword = "";
-
         if (inputMode === "email_password") {
           const parts = line.split(/[:\s,;\t]+/);
           if (parts.length >= 2 && parts[0].includes("@") && parts[1]) {
             email = parts[0].trim();
             linePassword = parts[1].trim();
           } else {
-            parseErrorLine = `Format salah di baris: "${line}". Harusnya email:password`;
+            parseErrorLine = `Format salah: "${line}". Harusnya email:password`;
             return;
           }
         } else {
-          // email_only mode
           if (line.includes("@")) {
             email = line.trim();
             linePassword = finalSharedPassword;
           } else {
-            parseErrorLine = `Format email salah di baris: "${line}"`;
+            parseErrorLine = `Format email salah: "${line}"`;
             return;
           }
         }
@@ -145,26 +113,21 @@ export default function BulkImport() {
           email,
           password: linePassword,
           type: accountType,
-          platform: platform as PlatformType,
-        });
+          platform: platform as PrismaPlatformType,
+        }); // Cast platform
       });
-
       if (parseErrorLine) throw new Error(parseErrorLine);
-      if (accountsToAdd.length === 0)
-        throw new Error("Tidak ada akun valid yang bisa ditambahkan.");
-
-      // Panggil fungsi addAccounts dari context (yang memanggil API Bulk)
-      // Pastikan context `addAccounts` dimodifikasi untuk menerima expiresAt
-      await addAccounts(accountsToAdd, expiresAt.toISOString());
-
+      if (accountsToAdd.length === 0) throw new Error("Tidak ada akun valid.");
+      await addAccounts(accountsToAdd, expiresAt.toISOString()); // Call context function
       toast({
         title: "✅ Import Berhasil!",
         description: `Berhasil mengimpor ${
           accountsToAdd.length
-        } akun ${accountType} (${platform.replace(/_/g, " ")}) ke Stok Utama.`,
+        } akun ${accountType} (${
+          PLATFORM_LIST.find((p) => p.key === platform)?.name || platform
+        }) ke Stok Utama.`,
         duration: 5000,
-      });
-
+      }); // Use PLATFORM_LIST for name in toast
       setEmails("");
       setPlatform("");
       setExpiresAt(addDays(new Date(), 30));
@@ -193,8 +156,6 @@ export default function BulkImport() {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
-
-        {/* Pilihan Tipe Akun */}
         <div className="space-y-3">
           <Label className="text-base font-semibold text-gray-700">
             Account Type
@@ -214,7 +175,7 @@ export default function BulkImport() {
                 className="w-5 h-5"
               />
               <Label htmlFor="private-bulk" className="text-base">
-                Private ({getDefaultProfileCount("private")} profiles)
+                Private ({getDefaultProfileCount("private")}p)
               </Label>
             </div>
             <div className="flex items-center space-x-3">
@@ -224,51 +185,53 @@ export default function BulkImport() {
                 className="w-5 h-5"
               />
               <Label htmlFor="sharing-bulk" className="text-base">
-                Sharing ({getDefaultProfileCount("sharing")} profiles)
+                Sharing ({getDefaultProfileCount("sharing")}p)
               </Label>
             </div>
             <div className="flex items-center space-x-3">
               <RadioGroupItem value="vip" id="vip-bulk" className="w-5 h-5" />
               <Label htmlFor="vip-bulk" className="text-base">
-                VIP ({getDefaultProfileCount("vip")} profiles)
+                VIP ({getDefaultProfileCount("vip")}p)
               </Label>
             </div>
           </RadioGroup>
         </div>
-
-        {/* Input Platform */}
+        {/* Platform Dropdown Updated */}
         <div className="space-y-2">
           <Label
             htmlFor="bulk-platform"
             className="text-base font-semibold text-gray-700"
           >
-            Platform (untuk semua akun)
+            Platform (untuk semua)
           </Label>
           <Select
             value={platform}
-            onValueChange={(value) => setPlatform(value as PlatformType)}
+            onValueChange={(value) => setPlatform(value as PrismaPlatformType)}
             disabled={isLoading}
           >
             <SelectTrigger id="bulk-platform" className="h-14 border-gray-300">
               <SelectValue placeholder="Pilih platform" />
             </SelectTrigger>
             <SelectContent className="max-h-60">
-              {platformOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
+              {PLATFORM_LIST.map(
+                (
+                  opt // Use PLATFORM_LIST
+                ) => (
+                  <SelectItem key={opt.key} value={opt.key}>
+                    {opt.name}
+                  </SelectItem>
+                )
+              )}
             </SelectContent>
           </Select>
         </div>
-
-        {/* Input ExpiresAt */}
+        {/* End Platform Update */}
         <div className="space-y-2">
           <Label
             htmlFor="bulk-expiresAt"
             className="text-base font-semibold text-gray-700"
           >
-            Tanggal Kadaluarsa (untuk semua akun)
+            Tanggal Kadaluarsa (untuk semua)
           </Label>
           <Popover>
             <PopoverTrigger asChild>
@@ -306,8 +269,6 @@ export default function BulkImport() {
             </PopoverContent>
           </Popover>
         </div>
-
-        {/* Opsi Mode Input */}
         <div className="space-y-2">
           <Label className="font-semibold">Mode Input Akun</Label>
           <div className="flex flex-wrap gap-2">
@@ -331,8 +292,6 @@ export default function BulkImport() {
             </Button>
           </div>
         </div>
-
-        {/* Input Akun (Textarea) */}
         <div className="space-y-3">
           <Label
             htmlFor="bulk-emails"
@@ -361,15 +320,13 @@ export default function BulkImport() {
               : "Satu email per baris."}
           </p>
         </div>
-
-        {/* Input Shared Password */}
         {inputMode === "email_only" && (
           <div className="space-y-3">
             <Label
               htmlFor="bulk-shared-password"
               className="text-base font-semibold text-gray-700"
             >
-              Shared Password (untuk semua email di atas)
+              Shared Password (untuk semua email)
             </Label>
             <Input
               id="bulk-shared-password"
@@ -383,14 +340,10 @@ export default function BulkImport() {
             />
           </div>
         )}
-
-        {/* Info Jumlah Profil Default */}
         <p className="text-sm text-gray-500 pt-2">
           📦 Setiap akun akan dibuat dengan{" "}
           {getDefaultProfileCount(accountType)} profile dan masuk ke Stok Utama.
         </p>
-
-        {/* Tombol Submit */}
         <Button
           type="submit"
           className="w-full h-16 text-lg font-bold bg-green-600 hover:bg-green-700"
@@ -399,8 +352,7 @@ export default function BulkImport() {
           {isLoading ? "Importing..." : "📦 Import ke Stok Utama"}
         </Button>
       </form>
-
-      {/* Info Panel */}
+      {/* Info Panel (tidak berubah) */}
       <div className="border border-gray-200 rounded-lg p-6">
         <h4 className="font-bold mb-4 text-gray-800 text-lg">
           💡 Info Mode Import:
@@ -412,13 +364,13 @@ export default function BulkImport() {
             </h5>
             <ul className="space-y-1 list-disc list-inside text-green-700">
               <li>
-                Akun yang diimpor akan <strong>MASUK ke stok utama</strong>.
+                Akun akan <strong>MASUK ke stok utama</strong>.
               </li>
               <li>
-                Jumlah profil otomatis sesuai Tipe Akun (
-                {getDefaultProfileCount(accountType)} untuk {accountType}).
+                Jumlah profil otomatis ({getDefaultProfileCount(accountType)}{" "}
+                untuk {accountType}).
               </li>
-              <li>Digunakan untuk menambah stok akun operasional.</li>
+              <li>Digunakan untuk menambah stok operasional.</li>
               <li>Akun ini bisa di-request oleh operator.</li>
               <li>Menambah hitungan "Available Profiles".</li>
             </ul>

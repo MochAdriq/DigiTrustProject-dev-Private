@@ -7,9 +7,9 @@
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
-    "db:push": "dotenv -e .env.local -- prisma db push",
-    "db:seed": "dotenv -e .env.local -- prisma db seed",
-    "db:studio": "dotenv -e .env.local -- prisma studio"
+    "db:push": "dotenv -e .env -- prisma db push",
+    "db:seed": "dotenv -e .env -- prisma db seed",
+    "db:studio": "dotenv -e .env -- prisma studio"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -77,6 +77,7 @@
     "postcss": "^8.5",
     "prisma": "latest",
     "tailwindcss": "^3.4.17",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }

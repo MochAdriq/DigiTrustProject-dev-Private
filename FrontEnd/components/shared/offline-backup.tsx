@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,9 +16,9 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAccounts } from "@/contexts/account-context";
-// import { getAllUsers } from "@/lib/auth" // <-- IMPORT YANG SALAH SUDAH DIHAPUS
 import { Progress } from "@/components/ui/progress";
 
+// Tipe data backup (hanya untuk validasi di frontend)
 interface BackupData {
   version: string;
   timestamp: string;
@@ -40,7 +39,8 @@ interface BackupData {
 }
 
 export default function OfflineBackup() {
-  const { accounts, customerAssignments, reportedAccounts } = useAccounts();
+  const { accounts, customerAssignments, reportedAccounts, refreshData } =
+    useAccounts(); // Ambil refreshData
   const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -49,49 +49,38 @@ export default function OfflineBackup() {
   const [exportProgress, setExportProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Get current user info
   const getCurrentUser = () => {
     try {
-      const user = localStorage.getItem("currentUser"); // Asumsi info user ada di 'currentUser'
+      const user = localStorage.getItem("currentUser");
       return user ? JSON.parse(user) : { name: "Unknown", username: "unknown" };
     } catch {
       return { name: "Unknown", username: "unknown" };
     }
   };
 
-  // ============================================================
-  // FUNGSI YANG DIPERBAIKI
-  // ============================================================
+  // Fungsi Export (tidak berubah dari sebelumnya, pastikan API users ada & pakai token)
   const createOfflineBackup = async () => {
     setIsExporting(true);
     setExportProgress(0);
-
     try {
-      // 1. Ambil token dari localStorage
-      //    Ganti 'token' jika key Anda berbeda
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("authToken"); // Ambil authToken
       if (!token) {
         throw new Error(
           "Token otentikasi tidak ditemukan. Silakan login ulang."
         );
       }
-
       const authHeaders = {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       };
-
       setExportProgress(10);
       await new Promise((resolve) => setTimeout(resolve, 200));
-
-      // 2. Fetch data users dari API
       let users: any[] = [];
       try {
         const res = await fetch("/api/users", {
           method: "GET",
           headers: authHeaders,
         });
-
         if (res.status === 401 || res.status === 403) {
           throw new Error(
             "Akses ditolak. Anda tidak memiliki izin untuk mengambil data user."
@@ -102,7 +91,6 @@ export default function OfflineBackup() {
         }
         users = await res.json();
       } catch (fetchError) {
-        // Tangani error fetch secara spesifik
         console.error("Gagal fetch users for backup:", fetchError);
         toast({
           title: "❌ Gagal Mengambil Data User",
@@ -114,18 +102,13 @@ export default function OfflineBackup() {
         });
         setIsExporting(false);
         setExportProgress(0);
-        return; // Hentikan eksekusi jika user gagal diambil
+        return;
       }
-
       setExportProgress(40);
       await new Promise((resolve) => setTimeout(resolve, 300));
-
-      // Get current user info
       const currentUser = getCurrentUser();
       setExportProgress(60);
       await new Promise((resolve) => setTimeout(resolve, 300));
-
-      // Create comprehensive backup data
       const backupData: BackupData = {
         version: "2.0",
         timestamp: new Date().toISOString(),
@@ -134,45 +117,34 @@ export default function OfflineBackup() {
           accounts: accounts || [],
           customerAssignments: customerAssignments || [],
           reportedAccounts: reportedAccounts || [],
-          users: users || [], // <-- Sekarang 'users' berisi data dari API
+          users: users || [],
         },
         metadata: {
           totalAccounts: accounts?.length || 0,
           totalAssignments: customerAssignments?.length || 0,
           totalReports: reportedAccounts?.length || 0,
-          totalUsers: users?.length || 0, // <-- total users juga sudah benar
+          totalUsers: users?.length || 0,
           exportedBy: `${currentUser.name} (${currentUser.username})`,
         },
       };
-
       setExportProgress(80);
       await new Promise((resolve) => setTimeout(resolve, 300));
-
-      // Convert to JSON with pretty formatting
       const jsonData = JSON.stringify(backupData, null, 2);
-
-      // Create and download file
       const blob = new Blob([jsonData], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-
-      // Generate filename with timestamp
       const now = new Date();
-      const dateStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
-      const timeStr = now.toTimeString().split(" ")[0].replace(/:/g, "-"); // HH-MM-SS
+      const dateStr = now.toISOString().split("T")[0];
+      const timeStr = now.toTimeString().split(" ")[0].replace(/:/g, "-");
       const filename = `trustdigital-backup-${dateStr}-${timeStr}.json`;
-
       link.setAttribute("href", url);
       link.setAttribute("download", filename);
       link.style.visibility = "hidden";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
       URL.revokeObjectURL(url);
       setExportProgress(100);
-
-      // Save backup info to localStorage
       const backupInfo = {
         lastBackup: new Date().toISOString(),
         lastBackupFile: filename,
@@ -182,10 +154,9 @@ export default function OfflineBackup() {
       };
       localStorage.setItem("lastBackupInfo", JSON.stringify(backupInfo));
       localStorage.setItem("backupCount", backupInfo.backupCount);
-
       toast({
         title: "✅ Backup Berhasil!",
-        description: `File ${filename} telah didownload. Total data: ${backupData.metadata.totalAccounts} akun, ${backupData.metadata.totalUsers} user.`,
+        description: `File ${filename} telah didownload.`,
         duration: 5000,
       });
     } catch (error) {
@@ -203,9 +174,6 @@ export default function OfflineBackup() {
       setExportProgress(0);
     }
   };
-  // ============================================================
-  // AKHIR DARI FUNGSI YANG DIPERBAIKI
-  // ============================================================
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -228,9 +196,12 @@ export default function OfflineBackup() {
           fileInputRef.current.value = "";
         }
       }
-    }
+    } else {
+      setSelectedFile(null);
+    } // Reset jika tidak ada file
   };
 
+  // --- FUNGSI IMPORT DIPERBARUI ---
   const importOfflineBackup = async () => {
     if (!selectedFile) {
       toast({
@@ -245,104 +216,141 @@ export default function OfflineBackup() {
     setImportProgress(0);
 
     try {
-      // Read file content
+      // 1. Baca file content
       setImportProgress(10);
       const fileContent = await selectedFile.text();
+      setImportProgress(20);
+
+      // 2. Parse JSON
+      const backupData: BackupData = JSON.parse(fileContent);
       setImportProgress(30);
 
-      // Parse JSON
-      const backupData: BackupData = JSON.parse(fileContent);
-      setImportProgress(50);
-
-      // Validate backup structure
-      if (!backupData.version || !backupData.data || !backupData.metadata) {
-        throw new Error("Format file backup tidak valid");
+      // 3. Validasi dasar (sama seperti sebelumnya)
+      if (
+        !backupData.version ||
+        !backupData.data ||
+        !backupData.metadata ||
+        !backupData.appName?.includes("TrustDigital")
+      ) {
+        throw new Error(
+          "Format file backup tidak valid atau bukan dari TrustDigital.ID"
+        );
       }
+      setImportProgress(40);
 
-      if (!backupData.appName?.includes("TrustDigital")) {
-        throw new Error("File backup bukan dari TrustDigital.ID");
-      }
-
-      setImportProgress(70);
-
-      // Show confirmation with backup details
-      const confirmMessage = `
-Apakah Anda yakin ingin mengimport data ini?
-
-📊 Detail Backup:
-• Tanggal: ${new Date(backupData.timestamp).toLocaleString("id-ID")}
-• Akun: ${backupData.metadata.totalAccounts}
-• Assignments: ${backupData.metadata.totalAssignments}
-• Reports: ${backupData.metadata.totalReports}
-• Users: ${backupData.metadata.totalUsers}
-• Dibuat oleh: ${backupData.metadata.exportedBy}
-
-⚠️ PERINGATAN: Data saat ini akan diganti!
-      `;
-
+      // 4. Konfirmasi User (sama seperti sebelumnya)
+      const confirmMessage = `Apakah Anda yakin ingin me-restore data dari backup ini?\n\nTanggal: ${new Date(
+        backupData.timestamp
+      ).toLocaleString("id-ID")}\nAkun: ${
+        backupData.metadata.totalAccounts
+      }\nAssignments: ${backupData.metadata.totalAssignments}\nReports: ${
+        backupData.metadata.totalReports
+      }\nUsers: ${
+        backupData.metadata.totalUsers
+      }\n\n⚠️ PERINGATAN: SEMUA DATA SAAT INI AKAN DIHAPUS DAN DIGANTI!`;
       if (!confirm(confirmMessage)) {
         setIsImporting(false);
         setImportProgress(0);
+        setSelectedFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = ""; // Reset file input
+        toast({
+          title: "Import Dibatalkan",
+          description: "Proses restore dibatalkan oleh user.",
+          variant: "default",
+        });
         return;
       }
 
+      // 5. Kirim data ke API
+      setImportProgress(60);
+      console.log("[Frontend] Sending restore data to API...");
+
+      // Ambil token otentikasi
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        throw new Error(
+          "Token otentikasi tidak ditemukan. Silakan login ulang."
+        );
+      }
+
+      const response = await fetch("/api/backup/restore", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // Kirim token
+        },
+        body: JSON.stringify(backupData.data), // Kirim HANYA bagian 'data'
+      });
+
       setImportProgress(90);
 
-      // In a real implementation, you would import to database
-      // For now, we'll show success message
+      // 6. Tangani respons API
+      if (!response.ok) {
+        // Jika API mengembalikan error
+        const errorData = await response
+          .json()
+          .catch(() => ({
+            error: "Failed to parse error response from server.",
+          })); // Tangani jika response bukan JSON
+        throw new Error(
+          errorData.error ||
+            `Server error: ${response.status} ${response.statusText}`
+        );
+      }
+
+      // Jika API sukses
+      const result = await response.json();
+      setImportProgress(100);
+
+      // 7. Tampilkan pesan sukses & refresh data
       toast({
-        title: "✅ Import Berhasil!",
-        description: `Data berhasil diimport: ${backupData.metadata.totalAccounts} akun, ${backupData.metadata.totalAssignments} assignments. Silakan refresh halaman.`,
+        title: "✅ Restore Berhasil!",
+        description:
+          result.message ||
+          `Data berhasil dipulihkan. Refresh halaman untuk melihat perubahan.`,
         duration: 8000,
       });
 
-      // Save import info
-      const importInfo = {
-        lastImport: new Date().toISOString(),
-        lastImportFile: selectedFile.name,
-        importedData: backupData.metadata,
-      };
-      localStorage.setItem("lastImportInfo", JSON.stringify(importInfo));
+      // Simpan info import (sama seperti sebelumnya)
+      localStorage.setItem(
+        "lastImportInfo",
+        JSON.stringify({
+          lastImport: new Date().toISOString(),
+          lastImportFile: selectedFile.name,
+          importedData: backupData.metadata,
+        })
+      );
 
-      setImportProgress(100);
-
-      // Reset file selection
+      // Reset state & input file
       setSelectedFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
 
-      // Suggest page refresh
-      setTimeout(() => {
-        if (
-          confirm("Import selesai! Refresh halaman untuk melihat data terbaru?")
-        ) {
-          window.location.reload();
-        }
-      }, 2000);
-    } catch (error) {
+      // Refresh data di context setelah restore berhasil
+      await refreshData(); // Panggil refreshData dari context
+
+      // (Optional) Tawarkan refresh halaman penuh
+      // setTimeout(() => { if (confirm("Restore selesai! Refresh halaman sekarang?")) { window.location.reload(); } }, 1000);
+    } catch (error: any) {
       console.error("Import error:", error);
       toast({
         title: "❌ Import Gagal",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Terjadi kesalahan saat mengimport data.",
+        description: error.message || "Terjadi kesalahan saat mengimport data.",
         variant: "destructive",
       });
+      setImportProgress(0); // Reset progress on error
     } finally {
       setIsImporting(false);
-      setImportProgress(0);
+      // Jangan reset progress di sini agar 100% terlihat
     }
   };
+  // --- AKHIR FUNGSI IMPORT ---
 
-  // Get backup statistics
+  // Fungsi getBackupStats (tidak berubah)
   const getBackupStats = () => {
     try {
       const backupInfo = localStorage.getItem("lastBackupInfo");
       const importInfo = localStorage.getItem("lastImportInfo");
       const backupCount = localStorage.getItem("backupCount") || "0";
-
       return {
         lastBackup: backupInfo ? JSON.parse(backupInfo) : null,
         lastImport: importInfo ? JSON.parse(importInfo) : null,
@@ -362,23 +370,24 @@ Apakah Anda yakin ingin mengimport data ini?
       };
     }
   };
-
   const stats = getBackupStats();
 
+  // JSX (tidak berubah signifikan)
   return (
     <div className="space-y-6">
       <Alert>
-        <Database className="h-4 w-4" />
-        <AlertTitle>💾 Backup Offline System</AlertTitle>
+        {" "}
+        <Database className="h-4 w-4" />{" "}
+        <AlertTitle>💾 Backup Offline System</AlertTitle>{" "}
         <AlertDescription>
+          {" "}
           Backup semua data akun, customer, dan pengaturan ke file JSON. Data
           bisa diimport kembali kapan saja untuk restore atau transfer ke device
-          lain.
-        </AlertDescription>
+          lain.{" "}
+        </AlertDescription>{" "}
       </Alert>
-
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Export/Backup Section */}
+        {/* Export Section */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -416,7 +425,6 @@ Apakah Anda yakin ingin mengimport data ini?
                 </div>
               </div>
             </div>
-
             {stats.lastBackup && (
               <div className="p-3 bg-gray-50 rounded-md">
                 <p className="text-sm text-gray-600">
@@ -431,7 +439,6 @@ Apakah Anda yakin ingin mengimport data ini?
                 </p>
               </div>
             )}
-
             {isExporting && (
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
@@ -441,7 +448,6 @@ Apakah Anda yakin ingin mengimport data ini?
                 <Progress value={exportProgress} className="w-full" />
               </div>
             )}
-
             <Button
               onClick={createOfflineBackup}
               disabled={isExporting}
@@ -459,15 +465,13 @@ Apakah Anda yakin ingin mengimport data ini?
                 </>
               )}
             </Button>
-
             <p className="text-xs text-gray-500">
               File JSON akan didownload berisi semua data akun, customer
               assignments, reports, dan user settings.
             </p>
           </CardContent>
         </Card>
-
-        {/* Import/Restore Section */}
+        {/* Import Section */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -496,7 +500,6 @@ Apakah Anda yakin ingin mengimport data ini?
                 </div>
               )}
             </div>
-
             {stats.lastImport && (
               <div className="p-3 bg-gray-50 rounded-md">
                 <p className="text-sm text-gray-600">
@@ -514,7 +517,6 @@ Apakah Anda yakin ingin mengimport data ini?
                 </p>
               </div>
             )}
-
             {isImporting && (
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
@@ -524,7 +526,6 @@ Apakah Anda yakin ingin mengimport data ini?
                 <Progress value={importProgress} className="w-full" />
               </div>
             )}
-
             <Button
               onClick={importOfflineBackup}
               disabled={isImporting || !selectedFile}
@@ -543,7 +544,6 @@ Apakah Anda yakin ingin mengimport data ini?
                 </>
               )}
             </Button>
-
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription className="text-xs">
@@ -554,7 +554,6 @@ Apakah Anda yakin ingin mengimport data ini?
           </CardContent>
         </Card>
       </div>
-
       {/* Usage Instructions */}
       <Card>
         <CardHeader>
@@ -574,18 +573,16 @@ Apakah Anda yakin ingin mengimport data ini?
                 <li>File berisi semua data akun dan settings</li>
               </ol>
             </div>
-
             <div>
               <h4 className="font-medium mb-2">🔼 Import/Restore:</h4>
               <ol className="text-sm space-y-1 list-decimal list-inside">
                 <li>Pilih file backup JSON</li>
                 <li>Klik "Import Backup"</li>
                 <li>Konfirmasi import (data current akan diganti)</li>
-                <li>Refresh halaman untuk melihat data baru</li>
+                <li>Data akan otomatis refresh jika berhasil</li>
               </ol>
             </div>
           </div>
-
           <div className="mt-4 p-3 bg-blue-50 rounded-md">
             <h4 className="font-medium text-blue-900 mb-2">💡 Tips:</h4>
             <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">

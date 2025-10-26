@@ -7,72 +7,103 @@ import {
   type ReactNode,
   useEffect,
   useCallback,
+  useMemo, // Pastikan useCallback diimpor
 } from "react";
 import { useToast } from "@/hooks/use-toast";
-// Hanya impor tipe custom
-import type { AccountType, PlatformType } from "@/lib/database-service";
-// Impor tipe model dari @prisma/client
+// Hanya impor AccountType dari service (untuk string literal 'private'|'sharing'|'vip')
+import type { AccountType } from "@/lib/database-service";
+// Impor tipe-tipe Model dan Enum dari Prisma Client
 import type {
   Account,
   GaransiAccount,
   ReportedAccount,
   CustomerAssignment,
   OperatorActivity,
+  PlatformType as PrismaPlatformType, // Gunakan alias agar jelas
 } from "@prisma/client";
 
-// Definisikan tipe data yang dikirim/diterima dari API
+// Tipe Data Laporan (dengan detail Akun)
+type ReportedAccountWithAccount = ReportedAccount & {
+  account: Pick<Account, "id" | "email" | "type" | "platform"> | null;
+  operatorName?: string | null;
+};
+
+// Tipe Data Statistik (sesuai API)
+export interface CustomerStatisticsData {
+  totalCustomers: number;
+  totalAssignments: number;
+  privateAccounts: number;
+  sharingAccounts: number;
+  vipAccounts: number;
+}
+export interface OperatorStats {
+  total: number;
+  private: number;
+  sharing: number;
+  vip: number;
+  byDate: Record<string, number>;
+}
+export type OperatorStatisticsData = Record<string, OperatorStats>;
+
+// Tipe Payload Assignment (di-export) - Sudah benar (tanpa profileName)
+export type AddCustomerAssignmentPayload = {
+  customerIdentifier: string;
+  accountId: string;
+  accountEmail: string;
+  accountType: AccountType;
+  operatorName?: string;
+};
+
+// Tipe Payload Lain (gunakan tipe Prisma)
 type AddAccountPayload = {
   email: string;
   password: string;
   type: AccountType;
-  platform: PlatformType;
-  expiresAt?: string; // Kirim sebagai string ISO
+  platform: PrismaPlatformType;
+  expiresAt?: string;
 };
-
 export type UpdateAccountPayload = {
   email?: string;
   password?: string;
-  expiresAt?: string; // Kirim sebagai string ISO
-  platform?: PlatformType;
+  expiresAt?: string;
+  platform?: PrismaPlatformType;
 };
-
-// --- TIPE BARU UNTUK BULK IMPORT ---
 type BulkAddAccountsPayload = {
   accounts: {
     email: string;
     password: string;
     type: AccountType;
-    platform: PlatformType;
+    platform: PrismaPlatformType;
   }[];
-  expiresAt: string; // Kirim sebagai string ISO
+  expiresAt: string;
 };
-// --- AKHIR TIPE BARU ---
 
-// Tipe untuk context
+// Interface/Tipe untuk Context Provider - Sudah benar
 interface AccountContextType {
   // States
   accounts: Account[];
   garansiAccounts: GaransiAccount[];
-  reportedAccounts: ReportedAccount[]; // State berisi semua report (termasuk resolved)
+  reportedAccounts: ReportedAccountWithAccount[];
   customerAssignments: CustomerAssignment[];
   operatorActivities: OperatorActivity[];
   isLoading: boolean;
+  availableProfileCounts: { private: number; sharing: number; vip: number };
+  customerStatistics: CustomerStatisticsData | null;
+  operatorStatistics: OperatorStatisticsData | null;
 
   // Actions (Async - Panggil API)
   refreshData: () => Promise<void>;
   addAccount: (payload: AddAccountPayload) => Promise<Account | null>;
-  // --- TIPE FUNGSI addAccounts (BULK) DITAMBAHKAN ---
   addAccounts: (
     accounts: BulkAddAccountsPayload["accounts"],
     expiresAt: string
   ) => Promise<{ processedCount?: number } | null>;
-  // --- AKHIR PENAMBAHAN TIPE ---
   addGaransiAccounts: (
     accounts: {
       email: string;
       password: string;
       type: AccountType;
-      platform: PlatformType;
+      platform: PrismaPlatformType;
     }[],
     expiresAt: string
   ) => Promise<void>;
@@ -84,61 +115,119 @@ interface AccountContextType {
   searchAccountsByEmail: (emailQuery: string) => Promise<Account[]>;
   getGaransiAccountsByDate: (date: string) => Promise<GaransiAccount[]>;
   getGaransiAccountsByExpiresAt: (date: string) => Promise<GaransiAccount[]>;
-  // TODO: Tambahkan tipe action lain
+  reportAccount: (
+    email: string,
+    reason: string,
+    operatorUsername: string
+  ) => Promise<boolean>;
+  resolveReport: (reportId: string, newPassword?: string) => Promise<boolean>;
+  addCustomerAssignment: (
+    payload: AddCustomerAssignmentPayload
+  ) => Promise<CustomerAssignment | null>;
+  isCustomerIdentifierUsed: (identifier: string) => Promise<boolean>;
+  getAvailableAccounts: (
+    platform: PrismaPlatformType,
+    type: AccountType
+  ) => Promise<Account[]>;
 
   // Getters (Sync - Baca State Client)
   getAccountsByType: (type: AccountType) => Account[];
   getAccountByEmail: (email: string) => Account | undefined;
   getAvailableProfileCount: (type: AccountType) => number;
-  getReportedAccounts: () => ReportedAccount[];
+  getReportedAccounts: () => ReportedAccountWithAccount[];
   getRemainingDays: (account: Account | GaransiAccount) => number;
+  getCustomerStatistics: () => CustomerStatisticsData | null;
+  getOperatorStatistics: () => OperatorStatisticsData | null;
 }
 
+// Buat Context
 const AccountContext = createContext<AccountContextType | undefined>(undefined);
 
-// Fungsi helper fetch (sudah benar)
+// Fungsi Helper Fetch (Sudah benar dengan token)
 async function fetchFromAPI(endpoint: string, options?: RequestInit) {
-  const res = await fetch(endpoint, options);
-  if (res.status === 204) return null;
-  if (!res.ok) {
-    let errorBody;
-    try {
-      errorBody = await res.json();
-    } catch {
-      errorBody = await res.text();
+  try {
+    const token = localStorage.getItem("authToken");
+    const headers = new Headers(options?.headers);
+    if (options?.body) {
+      headers.set("Content-Type", "application/json");
     }
-    const errorMessage =
-      typeof errorBody === "object" && errorBody?.error
-        ? errorBody.error
-        : typeof errorBody === "string"
-        ? errorBody
-        : "Unknown server error";
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+    const fetchOptions: RequestInit = { ...options, headers: headers };
+    const res = await fetch(endpoint, fetchOptions);
+
+    if (res.status === 401 || res.status === 403) {
+      console.error(
+        `[Fetch] Unauthorized/Forbidden (401/403) on ${endpoint}. Logging out.`
+      );
+      localStorage.removeItem("currentUser");
+      localStorage.removeItem("authToken");
+      if (typeof window !== "undefined") {
+        window.location.href = "/";
+      }
+      throw new Error("Sesi tidak valid atau telah kedaluwarsa.");
+    }
+    if (res.status === 204) {
+      console.log(`[Fetch] Received 204 No Content from ${endpoint}`);
+      return null;
+    }
+    if (!res.ok) {
+      let errorBody: any = `Request failed with status ${res.status}`;
+      try {
+        errorBody = await res.json();
+      } catch (e) {
+        try {
+          errorBody = await res.text();
+        } catch (textErr) {
+          /* ignore */
+        }
+      }
+      const errorMessage =
+        typeof errorBody === "object" && errorBody?.error
+          ? errorBody.error
+          : typeof errorBody === "string" && errorBody.length < 200
+          ? errorBody
+          : `Server error ${res.status} on ${endpoint}`;
+      console.error(
+        `[Fetch] API Error (${res.status} ${res.statusText}) on ${endpoint}:`,
+        errorMessage,
+        errorBody
+      );
+      throw new Error(errorMessage);
+    }
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      const data = await res.json();
+      console.log(`[Fetch] Success (JSON) from ${endpoint}`);
+      return data;
+    } else {
+      console.warn(
+        `[Fetch] Received non-JSON success response from ${endpoint}`
+      );
+      return null;
+    }
+  } catch (error) {
     console.error(
-      `API Error (${res.status} ${res.statusText}) on ${endpoint}:`,
-      errorMessage
+      `[Fetch] Network or processing error for ${endpoint}:`,
+      error
     );
-    throw new Error(errorMessage || `Failed request to ${endpoint}`);
+    throw error;
   }
-  const contentType = res.headers.get("content-type");
-  if (contentType && contentType.includes("application/json"))
-    return res.json();
-  else if (res.ok) {
-    console.warn(`Received non-JSON response from ${endpoint}`);
-    return await res.text();
-  }
-  throw new Error(
-    `Unexpected response from ${endpoint}: ${res.status} ${res.statusText}`
-  );
 }
 
+// Provider Komponen
 export function AccountProvider({ children }: { children: ReactNode }) {
+  // <-- Pastikan kurung kurawal benar
   const { toast } = useToast();
+
+  // --- States ---
   const [isLoading, setIsLoading] = useState(true);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [garansiAccounts, setGaransiAccounts] = useState<GaransiAccount[]>([]);
-  const [reportedAccounts, setReportedAccounts] = useState<ReportedAccount[]>(
-    []
-  );
+  const [reportedAccounts, setReportedAccounts] = useState<
+    ReportedAccountWithAccount[]
+  >([]);
   const [customerAssignments, setCustomerAssignments] = useState<
     CustomerAssignment[]
   >([]);
@@ -150,54 +239,99 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     sharing: number;
     vip: number;
   }>({ private: 0, sharing: 0, vip: 0 });
+  const [customerStatistics, setCustomerStatistics] =
+    useState<CustomerStatisticsData | null>(null);
+  const [operatorStatistics, setOperatorStatistics] =
+    useState<OperatorStatisticsData | null>(null);
 
-  // Refresh Data (sudah benar)
+  // --- Fungsi Refresh Data ---
   const refreshData = useCallback(async () => {
     setIsLoading(true);
-    console.log("🔄 Refreshing data...");
+    console.log("🔄 Refreshing all data...");
     try {
-      const [aData, gData, rData, cData, oData, pCount, sCount, vCount] =
-        await Promise.all([
-          fetchFromAPI("/api/accounts"),
-          fetchFromAPI("/api/garansi-accounts"),
-          fetchFromAPI("/api/reported-accounts"),
-          fetchFromAPI("/api/customer-assignments"),
-          fetchFromAPI("/api/operator-activities"),
-          fetchFromAPI("/api/statistics/profiles/private"),
-          fetchFromAPI("/api/statistics/profiles/sharing"),
-          fetchFromAPI("/api/statistics/profiles/vip"),
-        ]);
+      const [
+        aData,
+        gData,
+        rData,
+        cData,
+        oData,
+        pCount,
+        sCount,
+        vCount,
+        custStats,
+        opStats,
+      ] = await Promise.all([
+        fetchFromAPI("/api/accounts").catch((e) => {
+          console.error("Failed accounts fetch:", e);
+          return [];
+        }),
+        fetchFromAPI("/api/garansi-accounts").catch((e) => {
+          console.error("Failed garansi fetch:", e);
+          return [];
+        }),
+        fetchFromAPI("/api/reported-accounts").catch((e) => {
+          console.error("Failed reported fetch:", e);
+          return [];
+        }),
+        fetchFromAPI("/api/customer-assignments").catch((e) => {
+          console.error("Failed assignments fetch:", e);
+          return [];
+        }),
+        fetchFromAPI("/api/operator-activities").catch((e) => {
+          console.error("Failed activities fetch:", e);
+          return [];
+        }),
+        fetchFromAPI("/api/statistics/profiles/private").catch((e) => {
+          console.error("Failed private count fetch:", e);
+          return { count: 0 };
+        }),
+        fetchFromAPI("/api/statistics/profiles/sharing").catch((e) => {
+          console.error("Failed sharing count fetch:", e);
+          return { count: 0 };
+        }),
+        fetchFromAPI("/api/statistics/profiles/vip").catch((e) => {
+          console.error("Failed vip count fetch:", e);
+          return { count: 0 };
+        }),
+        fetchFromAPI("/api/statistics/customers").catch((e) => {
+          console.error("Failed customer stats fetch:", e);
+          return null;
+        }),
+        fetchFromAPI("/api/statistics/operators").catch((e) => {
+          console.error("Failed operator stats fetch:", e);
+          return null;
+        }),
+      ]);
       setAccounts(Array.isArray(aData) ? aData : []);
       setGaransiAccounts(Array.isArray(gData) ? gData : []);
       setReportedAccounts(Array.isArray(rData) ? rData : []);
       setCustomerAssignments(Array.isArray(cData) ? cData : []);
       setOperatorActivities(Array.isArray(oData) ? oData : []);
       setAvailableProfileCounts({
-        private: pCount?.count ?? 0,
-        sharing: sCount?.count ?? 0,
-        vip: vCount?.count ?? 0,
+        private: (pCount as { count: number })?.count ?? 0,
+        sharing: (sCount as { count: number })?.count ?? 0,
+        vip: (vCount as { count: number })?.count ?? 0,
       });
-      console.log("✅ Data refreshed successfully");
+      setCustomerStatistics(custStats as CustomerStatisticsData | null);
+      setOperatorStatistics(opStats as OperatorStatisticsData | null);
+      console.log("✅ Data refreshed.");
     } catch (error) {
-      console.error("❌ Error loading data:", error);
+      console.error(
+        "❌ Unexpected error during refreshData Promise.all:",
+        error
+      );
       toast({
-        title: "⚠️ Database Error",
-        description: "Gagal memuat data dari server.",
+        title: "⚠️ Error",
+        description: "Terjadi kesalahan tidak terduga saat memuat data.",
         variant: "destructive",
       });
-      setAccounts([]);
-      setGaransiAccounts([]);
-      setReportedAccounts([]);
-      setCustomerAssignments([]);
-      setOperatorActivities([]);
-      setAvailableProfileCounts({ private: 0, sharing: 0, vip: 0 });
     } finally {
       setIsLoading(false);
       console.log("🏁 Refresh complete.");
     }
-  }, [toast]);
+  }, [toast]); // <-- Pastikan dependency useCallback benar
 
-  // useEffects (sudah benar)
+  // useEffects
   useEffect(() => {
     refreshData();
   }, [refreshData]);
@@ -208,291 +342,432 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(i);
   }, [isLoading, refreshData]);
 
-  // --- IMPLEMENTASI FUNGSI AKUN UTAMA (VIA API) ---
+  // --- Implementasi Fungsi CRUD & Lainnya ---
 
-  const addAccount = async (
-    payload: AddAccountPayload
-  ): Promise<Account | null> => {
-    try {
-      const d = await fetchFromAPI("/api/accounts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      await refreshData();
-      toast({
-        title: "✅ Akun Ditambahkan",
-        description: `${payload.email} berhasil.`,
-      });
-      return d;
-    } catch (e: any) {
-      console.error("Err add acc:", e);
-      toast({
-        title: "❌ Gagal Tambah",
-        description: e.message || "Error.",
-        variant: "destructive",
-      });
-      return null;
-    }
-  };
-
-  // --- IMPLEMENTASI FUNGSI addAccounts BARU (BULK IMPORT) ---
-  const addAccounts = async (
-    accounts: BulkAddAccountsPayload["accounts"],
-    expiresAt: string
-  ): Promise<{ processedCount?: number } | null> => {
-    try {
-      const payload: BulkAddAccountsPayload = { accounts, expiresAt };
-      console.log(
-        `Sending bulk import request for ${accounts.length} accounts...`
-      );
-
-      // Panggil API bulk import POST /api/accounts/bulk
-      const result = await fetchFromAPI("/api/accounts/bulk", {
-        // Pastikan endpoint benar
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      await refreshData(); // Refresh setelah berhasil
-      // Toast sukses ditangani oleh BulkImport.tsx
-      console.log("Bulk import API response:", result);
-      // Kembalikan hasil dari API (misal: { processedCount: number })
-      return result;
-    } catch (error: any) {
-      console.error("Error adding multiple accounts:", error);
-      // Toast error ditangani oleh BulkImport.tsx
-      throw error; // Lempar error agar BulkImport bisa menangkapnya
-    }
-  };
-  // --- AKHIR IMPLEMENTASI addAccounts ---
-
-  const updateAccount = async (
-    id: string,
-    payload: UpdateAccountPayload
-  ): Promise<Account | null> => {
-    try {
-      const d = await fetchFromAPI(`/api/accounts/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      await refreshData();
-      toast({ title: "✅ Akun Diupdate" });
-      return d;
-    } catch (e: any) {
-      console.error(`Err update acc ${id}:`, e);
-      toast({
-        title: "❌ Gagal Update",
-        description: e.message || "Error.",
-        variant: "destructive",
-      });
-      return null;
-    }
-  };
-
-  const deleteAccount = async (id: string): Promise<boolean> => {
-    try {
-      await fetchFromAPI(`/api/accounts/${id}`, { method: "DELETE" });
-      await refreshData();
-      toast({ title: "✅ Akun Dihapus" });
-      return true;
-    } catch (e: any) {
-      console.error(`Err delete acc ${id}:`, e);
-      toast({
-        title: "❌ Gagal Hapus",
-        description: e.message || "Error.",
-        variant: "destructive",
-      });
-      return false;
-    }
-  };
-
-  const searchAccountsByEmail = async (
-    emailQuery: string
-  ): Promise<Account[]> => {
-    if (!emailQuery?.trim()) return [];
-    try {
-      const q = encodeURIComponent(emailQuery);
-      const d = await fetchFromAPI(`/api/accounts/search?email=${q}`);
-      return Array.isArray(d) ? d : [];
-    } catch (e: any) {
-      console.error("Err search acc:", e);
-      toast({
-        title: "❌ Gagal Cari",
-        description: e.message || "Error.",
-        variant: "destructive",
-      });
-      return [];
-    }
-  };
-
-  // --- AKHIR IMPLEMENTASI FUNGSI AKUN UTAMA ---
-
-  // --- Implementasi Fungsi Garansi (Sudah Benar via API) ---
-  const addGaransiAccounts = async (
-    newAccounts: {
-      email: string;
-      password: string;
-      type: AccountType;
-      platform: PlatformType;
-    }[],
-    expiresAt: string
-  ) => {
-    try {
-      const res = await fetch("/api/garansi-accounts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accounts: newAccounts, expiresAt }),
-      });
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({ error: "Parse fail" }));
-        throw new Error(e.error || `Server error: ${res.status}`);
+  // Akun Utama
+  const addAccount = useCallback(
+    async (payload: AddAccountPayload): Promise<Account | null> => {
+      try {
+        const d = await fetchFromAPI("/api/accounts", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        await refreshData();
+        toast({
+          title: "✅ Akun Ditambahkan",
+          description: `${payload.email} berhasil.`,
+        });
+        return d as Account | null;
+      } catch (e: any) {
+        toast({
+          title: "❌ Gagal Tambah",
+          description: e.message || "Error.",
+          variant: "destructive",
+        });
+        return null;
       }
-      await refreshData();
-    } catch (error) {
-      console.error("Error adding garansi accounts:", error);
-      throw error;
-    }
-  };
+    },
+    [refreshData, toast]
+  ); // <-- Tambah useCallback & dependencies
+
+  const addAccounts = useCallback(
+    async (
+      accounts: BulkAddAccountsPayload["accounts"],
+      expiresAt: string
+    ): Promise<{ processedCount?: number } | null> => {
+      try {
+        const payload: BulkAddAccountsPayload = { accounts, expiresAt };
+        const result = await fetchFromAPI("/api/accounts/bulk", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        await refreshData();
+        return result as { processedCount?: number } | null;
+      } catch (error: any) {
+        toast({
+          title: "❌ Gagal Bulk Import",
+          description: error.message || "Error.",
+          variant: "destructive",
+        });
+        throw error;
+      }
+    },
+    [refreshData, toast]
+  ); // <-- Tambah useCallback & dependencies
+
+  const updateAccount = useCallback(
+    async (
+      id: string,
+      payload: UpdateAccountPayload
+    ): Promise<Account | null> => {
+      try {
+        const d = await fetchFromAPI(`/api/accounts/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+        await refreshData();
+        toast({ title: "✅ Akun Diupdate" });
+        return d as Account | null;
+      } catch (e: any) {
+        toast({
+          title: "❌ Gagal Update",
+          description: e.message || "Error.",
+          variant: "destructive",
+        });
+        return null;
+      }
+    },
+    [refreshData, toast]
+  ); // <-- Tambah useCallback & dependencies
+
+  const deleteAccount = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        await fetchFromAPI(`/api/accounts/${id}`, { method: "DELETE" });
+        await refreshData();
+        toast({ title: "✅ Akun Dihapus" });
+        return true;
+      } catch (e: any) {
+        toast({
+          title: "❌ Gagal Hapus",
+          description: e.message || "Error.",
+          variant: "destructive",
+        });
+        return false;
+      }
+    },
+    [refreshData, toast]
+  ); // <-- Tambah useCallback & dependencies
+
+  const searchAccountsByEmail = useCallback(
+    async (emailQuery: string): Promise<Account[]> => {
+      if (!emailQuery?.trim()) return [];
+      try {
+        const q = encodeURIComponent(emailQuery);
+        const d = await fetchFromAPI(`/api/accounts/search?email=${q}`);
+        return Array.isArray(d) ? d : [];
+      } catch (e: any) {
+        toast({
+          title: "❌ Gagal Cari",
+          description: e.message || "Error.",
+          variant: "destructive",
+        });
+        return [];
+      }
+    },
+    [toast]
+  ); // <-- Tambah useCallback & dependencies
+
+  // Akun Garansi
+  const addGaransiAccounts = useCallback(
+    async (
+      newAccounts: {
+        email: string;
+        password: string;
+        type: AccountType;
+        platform: PrismaPlatformType;
+      }[],
+      expiresAt: string
+    ) => {
+      try {
+        await fetchFromAPI("/api/garansi-accounts", {
+          method: "POST",
+          body: JSON.stringify({ accounts: newAccounts, expiresAt }),
+        });
+        await refreshData();
+        toast({ title: "✅ Garansi Ditambahkan" });
+      } catch (error: any) {
+        toast({
+          title: "❌ Gagal Tambah Garansi",
+          description: error.message || "Error.",
+          variant: "destructive",
+        });
+        throw error;
+      }
+    },
+    [refreshData, toast]
+  ); // <-- Tambah useCallback & dependencies
 
   const getGaransiAccountsByDate = useCallback(
     async (date: string): Promise<GaransiAccount[]> => {
-      // Tambah useCallback
       try {
-        const d = await fetchFromAPI(
-          `/api/garansi-accounts/search/by-date?date=${date}`
-        );
+        const d = await fetchFromAPI(`/api/garansi-accounts?date=${date}`);
         return Array.isArray(d) ? d : [];
       } catch (e: any) {
-        console.error("Err fetch garansi by date:", e);
         toast({
           title: "❌ Gagal Cari Garansi",
-          description: e.message || "Gagal cari by date.",
+          description: e.message || "Error.",
           variant: "destructive",
         });
         return [];
       }
     },
     [toast]
-  ); // Tambah dependency toast
+  ); // <-- Tidak perlu refreshData
 
   const getGaransiAccountsByExpiresAt = useCallback(
     async (date: string): Promise<GaransiAccount[]> => {
-      // Tambah useCallback
       try {
-        const d = await fetchFromAPI(
-          `/api/garansi-accounts/search/by-expires?date=${date}`
-        );
+        const d = await fetchFromAPI(`/api/garansi-accounts?expires=${date}`);
         return Array.isArray(d) ? d : [];
       } catch (e: any) {
-        console.error("Err fetch garansi by expires:", e);
         toast({
           title: "❌ Gagal Cari Garansi",
-          description: e.message || "Gagal cari by expires.",
+          description: e.message || "Error.",
           variant: "destructive",
         });
         return [];
       }
     },
     [toast]
-  ); // Tambah dependency toast
-  // --- Akhir Fungsi Garansi ---
+  ); // <-- Tidak perlu refreshData
 
-  // --- Fungsi Getter Client-Side (Sudah Benar) ---
-  const getRemainingDays = useCallback(
-    (account: Account | GaransiAccount): number => {
-      // Tambah useCallback
-      if (!account?.expiresAt) return 0;
-      try {
-        const now = new Date();
-        const expires = new Date(account.expiresAt);
-        if (isNaN(expires.getTime())) return 0;
-        const diffTime = expires.getTime() - now.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return Math.max(-999, diffDays);
-      } catch (e) {
-        return 0;
-      }
-    },
-    []
-  ); // Dependency kosong
-
-  const getAccountsByType = useCallback(
-    (type: AccountType): Account[] => {
-      // Tambah useCallback
-      if (!Array.isArray(accounts)) return [];
-      return accounts.filter((account) => account.type === type);
-    },
-    [accounts]
-  ); // Dependency: accounts
-
+  // Report & Resolve
   const getAccountByEmail = useCallback(
     (email: string): Account | undefined => {
-      // Tambah useCallback
       if (!Array.isArray(accounts) || !email) return undefined;
       return accounts.find(
         (a) => a.email.toLowerCase() === email.toLowerCase()
       );
     },
     [accounts]
-  ); // Dependency: accounts
+  ); // <-- Hanya bergantung pada state 'accounts'
 
-  const getAvailableProfileCount = useCallback(
-    (type: AccountType): number => {
-      return availableProfileCounts[type] ?? 0;
+  const reportAccount = useCallback(
+    async (
+      email: string,
+      reason: string,
+      operatorUsername: string
+    ): Promise<boolean> => {
+      try {
+        const account = getAccountByEmail(email);
+        if (!account) throw new Error("Akun tidak ditemukan.");
+        await fetchFromAPI("/api/reported-accounts", {
+          method: "POST",
+          body: JSON.stringify({
+            accountId: account.id,
+            reason,
+            operatorName: operatorUsername,
+          }),
+        });
+        await refreshData();
+        toast({ title: "✅ Akun Dilaporkan" });
+        return true;
+      } catch (e: any) {
+        toast({
+          title: "❌ Gagal Lapor",
+          description: e.message || "Error.",
+          variant: "destructive",
+        });
+        return false;
+      }
     },
-    [availableProfileCounts]
+    [getAccountByEmail, refreshData, toast]
+  ); // <-- Tambah dependencies
+
+  const resolveReport = useCallback(
+    async (reportId: string, newPassword?: string): Promise<boolean> => {
+      try {
+        await fetchFromAPI(`/api/reported-accounts/${reportId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ newPassword }),
+        });
+        await refreshData();
+        toast({ title: "✅ Laporan Diselesaikan" });
+        return true;
+      } catch (e: any) {
+        toast({
+          title: "❌ Gagal Resolve",
+          description: e.message || "Error.",
+          variant: "destructive",
+        });
+        return false;
+      }
+    },
+    [refreshData, toast]
+  ); // <-- Tambah dependencies
+
+  // Assignment (refreshData dihapus) - Sudah benar
+  const addCustomerAssignment = useCallback(
+    async (
+      payload: AddCustomerAssignmentPayload
+    ): Promise<CustomerAssignment | null> => {
+      try {
+        const newAssignment = await fetchFromAPI("/api/customer-assignments", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        /* await refreshData(); */ toast({ title: "✅ Assignment Berhasil" });
+        return newAssignment as CustomerAssignment | null;
+      } catch (e: any) {
+        toast({
+          title: "❌ Gagal Assignment",
+          description: e.message || "Error.",
+          variant: "destructive",
+        });
+        return null;
+      }
+    },
+    [toast]
+  ); // <-- Hanya perlu toast
+
+  const isCustomerIdentifierUsed = useCallback(
+    async (identifier: string): Promise<boolean> => {
+      if (!identifier?.trim()) return false;
+      try {
+        const encoded = encodeURIComponent(identifier);
+        const result = await fetchFromAPI(
+          `/api/customer-assignments/check/${encoded}`
+        );
+        return (result as { used: boolean })?.used === true;
+      } catch (e: any) {
+        console.error("Gagal check customer:", e);
+        return false;
+      }
+    },
+    []
+  ); // <-- Tidak ada dependencies
+
+  // Ambil Akun Tersedia (Sudah dibungkus useCallback) - Sudah benar
+  const getAvailableAccounts = useCallback(
+    async (
+      platform: PrismaPlatformType,
+      type: AccountType
+    ): Promise<Account[]> => {
+      try {
+        if (!platform || !type) return [];
+        const available = await fetchFromAPI(
+          `/api/accounts/available?platform=${platform}&type=${type}`
+        );
+        return Array.isArray(available) ? available : [];
+      } catch (e: any) {
+        toast({
+          title: "❌ Gagal Ambil Akun",
+          description: `Tidak dapat memuat akun ${platform} tipe ${type}. Coba refresh.`,
+          variant: "destructive",
+        });
+        return [];
+      }
+    },
+    [toast]
   );
 
-  const getReportedAccounts = useCallback((): ReportedAccount[] => {
-    // Tambah useCallback
-    return Array.isArray(reportedAccounts)
-      ? reportedAccounts.filter((report) => !report.resolved)
-      : [];
-  }, [reportedAccounts]); // Dependency: reportedAccounts
-  // --- Akhir Fungsi Getter ---
+  // --- Getters --- (Dibungkus useCallback untuk stabilitas referensi)
+  const getCustomerStatistics = useCallback(
+    (): CustomerStatisticsData | null => customerStatistics,
+    [customerStatistics]
+  );
+  const getOperatorStatistics = useCallback(
+    (): OperatorStatisticsData | null => operatorStatistics,
+    [operatorStatistics]
+  );
+  const getRemainingDays = useCallback(
+    (account: Account | GaransiAccount): number => {
+      if (!account?.expiresAt) return 0;
+      try {
+        const now = new Date();
+        const expires = new Date(account.expiresAt);
+        if (isNaN(expires.getTime())) return 0;
+        const diff = expires.getTime() - now.getTime();
+        return Math.max(-999, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+      } catch {
+        return 0;
+      }
+    },
+    []
+  );
+  const getAccountsByType = useCallback(
+    (type: AccountType): Account[] => accounts.filter((a) => a.type === type),
+    [accounts]
+  );
+  const getAvailableProfileCount = useCallback(
+    (type: AccountType): number => availableProfileCounts[type] ?? 0,
+    [availableProfileCounts]
+  );
+  const getReportedAccounts = useCallback(
+    (): ReportedAccountWithAccount[] =>
+      reportedAccounts.filter((r) => !r.resolved),
+    [reportedAccounts]
+  );
 
-  // TODO: Implementasikan fungsi action lain (report, resolve, assign) via API
+  // --- Provider Value ---
+  const contextValue = useMemo(
+    () => ({
+      // Bungkus value dengan useMemo
+      accounts,
+      garansiAccounts,
+      reportedAccounts,
+      customerAssignments,
+      operatorActivities,
+      isLoading,
+      availableProfileCounts,
+      customerStatistics,
+      operatorStatistics,
+      refreshData,
+      addAccount,
+      addAccounts,
+      addGaransiAccounts,
+      updateAccount,
+      deleteAccount,
+      searchAccountsByEmail,
+      getGaransiAccountsByDate,
+      getGaransiAccountsByExpiresAt,
+      reportAccount,
+      resolveReport,
+      addCustomerAssignment,
+      isCustomerIdentifierUsed,
+      getAvailableAccounts,
+      getRemainingDays,
+      getAccountsByType,
+      getAccountByEmail,
+      getAvailableProfileCount,
+      getReportedAccounts,
+      getCustomerStatistics,
+      getOperatorStatistics,
+    }),
+    [
+      accounts,
+      garansiAccounts,
+      reportedAccounts,
+      customerAssignments,
+      operatorActivities,
+      isLoading,
+      availableProfileCounts,
+      customerStatistics,
+      operatorStatistics,
+      refreshData,
+      addAccount,
+      addAccounts,
+      addGaransiAccounts,
+      updateAccount,
+      deleteAccount,
+      searchAccountsByEmail,
+      getGaransiAccountsByDate,
+      getGaransiAccountsByExpiresAt,
+      reportAccount,
+      resolveReport,
+      addCustomerAssignment,
+      isCustomerIdentifierUsed,
+      getAvailableAccounts,
+      getRemainingDays,
+      getAccountsByType,
+      getAccountByEmail,
+      getAvailableProfileCount,
+      getReportedAccounts,
+      getCustomerStatistics,
+      getOperatorStatistics,
+    ]
+  ); // Masukkan semua state dan fungsi ke dependency array useMemo
 
-  // --- PASTIKAN SEMUA FUNGSI ADA DI VALUE ---
   return (
-    <AccountContext.Provider
-      value={{
-        // States
-        accounts,
-        garansiAccounts,
-        reportedAccounts,
-        customerAssignments,
-        operatorActivities,
-        isLoading,
-        // Actions (via API)
-        refreshData,
-        addAccount,
-        addAccounts, // <-- Tambahkan fungsi bulk import ke value
-        addGaransiAccounts,
-        updateAccount,
-        deleteAccount,
-        searchAccountsByEmail,
-        getGaransiAccountsByDate,
-        getGaransiAccountsByExpiresAt,
-        // Getters (Client-side)
-        getRemainingDays,
-        getAccountsByType,
-        getAccountByEmail,
-        getAvailableProfileCount,
-        getReportedAccounts,
-        // TODO: Export fungsi action lain
-      }}
-    >
+    <AccountContext.Provider value={contextValue}>
       {children}
     </AccountContext.Provider>
   );
-}
+} // <-- Pastikan kurung kurawal ini ada dan benar
 
-// Hook useAccounts (sudah benar)
-export function useAccounts() {
+// Hook useAccounts (Sudah benar)
+export function useAccounts(): AccountContextType {
   const context = useContext(AccountContext);
   if (context === undefined) {
     throw new Error("useAccounts must be used within an AccountProvider");

@@ -3,17 +3,32 @@
 import { NextResponse } from "next/server";
 import { DatabaseService } from "@/lib/database-service";
 
-export const runtime = "nodejs"; // Prisma needs Node.js
-
-export async function GET() {
+/**
+ * --------------------------------------------------------------------------------
+ * 🔹 GET /api/operator-activities
+ * --------------------------------------------------------------------------------
+ * Endpoint untuk mengambil SEMUA log aktivitas operator dari database.
+ * Diurutkan berdasarkan tanggal terbaru.
+ */
+export async function GET(request: Request) {
   try {
+    console.log("[API] Fetching all operator activities...");
+
+    // Panggil fungsi dari DatabaseService
     const activities = await DatabaseService.getAllOperatorActivities();
-    return NextResponse.json(activities);
-  } catch (error) {
-    console.error("Error fetching operator activities:", error);
+
+    console.log(`[API] Found ${activities.length} operator activities.`);
+
+    // Kembalikan data
+    return NextResponse.json(activities, { status: 200 }); // OK
+  } catch (error: any) {
+    console.error(
+      "❌ [API] GET /api/operator-activities error:",
+      error.message
+    );
     return NextResponse.json(
-      { error: "Failed to fetch operator activities" },
-      { status: 500 }
+      { error: "Failed to fetch operator activities." },
+      { status: 500 } // Internal Server Error
     );
   }
 }

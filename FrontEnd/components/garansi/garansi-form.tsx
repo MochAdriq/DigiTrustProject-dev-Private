@@ -21,41 +21,24 @@ import {
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { useAccounts } from "@/contexts/account-context";
-// --- IMPORTS DIPERBARUI ---
-import { AccountType, PlatformType } from "@/lib/database-service"; // Impor tipe
-import { format, addDays } from "date-fns"; // Impor addDays
-// --- AKHIR IMPORTS ---
+// Import types from Prisma
+import type {
+  AccountType,
+  PlatformType as PrismaPlatformType,
+} from "@prisma/client";
+import { format, addDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { AlertCircle, Info } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
-// --- OPSI UNTUK DROPDOWN PLATFORM ---
-const platformOptions: { value: PlatformType; label: string }[] = [
-  { value: "NETFLIX", label: "Netflix" },
-  { value: "DISNEY", label: "Disney+" },
-  { value: "HBO", label: "HBO Go" },
-  { value: "PRIMEVIDEO", label: "Prime Video" },
-  { value: "VIDIO_DIAMOND_MOBILE", label: "Vidio Diamond Mobile" },
-  { value: "VIDIO_PLATINUM", label: "Vidio Platinum" },
-  { value: "VIU_1_BULAN", label: "Viu (1 Bulan)" },
-  { value: "WE_TV", label: "WeTV" },
-  { value: "YOUTUBE_1_BULAN", label: "YouTube (1 Bulan)" },
-  { value: "LOKLOK", label: "LokLok" },
-  { value: "SPOTIFY_FAMPLAN_1_BULAN", label: "Spotify 1 Bulan" },
-  { value: "SPOTIFY_FAMPLAN_2_BULAN", label: "Spotify 2 Bulan" },
-  { value: "CANVA_1_BULAN", label: "Canva (1 Bulan)" },
-  { value: "CANVA_1_TAHUN", label: "Canva (1 Tahun)" },
-  { value: "CHAT_GPT", label: "Chat GPT" },
-  { value: "CAPCUT", label: "CAPCUT" },
-];
-// --- AKHIR OPSI PLATFORM ---
+// Import constants for dropdown
+import { PLATFORM_LIST } from "@/lib/constants";
 
 export default function GaransiForm() {
   const { addGaransiAccounts } = useAccounts();
   const { toast } = useToast();
 
-  const [accountType, setAccountType] = useState<AccountType | "">("");
-  const [platform, setPlatform] = useState<PlatformType | "">("");
+  const [accountType, setAccountType] = useState<AccountType | "">(""); // Use Prisma AccountType if needed
+  const [platform, setPlatform] = useState<PrismaPlatformType | "">(""); // Use Prisma PlatformType
   const [accountInput, setAccountInput] = useState("");
   const [sharedPassword, setSharedPassword] = useState("");
   const [expiresAt, setExpiresAt] = useState<Date | undefined>(
@@ -67,33 +50,33 @@ export default function GaransiForm() {
     "email_password"
   );
 
+  // handleSubmit (ensure platform cast is correct)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
-
     if (!accountType) {
-      setError("Pilih tipe akun terlebih dahulu.");
+      setError("Pilih tipe akun.");
       setIsLoading(false);
       return;
     }
     if (!platform) {
-      setError("Pilih platform terlebih dahulu.");
+      setError("Pilih platform.");
       setIsLoading(false);
       return;
     }
     if (!accountInput.trim()) {
-      setError("Masukkan data akun (email atau email:password).");
+      setError("Masukkan data akun.");
       setIsLoading(false);
       return;
     }
     if (inputMode === "email_only" && !sharedPassword.trim()) {
-      setError("Masukkan shared password untuk mode input email saja.");
+      setError("Masukkan shared password.");
       setIsLoading(false);
       return;
     }
     if (!expiresAt) {
-      setError("Pilih tanggal kadaluarsa akun.");
+      setError("Pilih tanggal kadaluarsa.");
       setIsLoading(false);
       return;
     }
@@ -103,26 +86,22 @@ export default function GaransiForm() {
       email: string;
       password: string;
       type: AccountType;
-      platform: PlatformType;
+      platform: PrismaPlatformType;
     }[] = [];
     let parseError = false;
 
     lines.forEach((line) => {
       const trimmedLine = line.trim();
-      if (!trimmedLine) return;
-
+      if (!trimmedLine || parseError) return;
       let email = "";
       let password = "";
-
       if (inputMode === "email_password") {
         const parts = trimmedLine.split(/[:\s,;\t]+/);
         if (parts.length >= 2 && parts[0].includes("@")) {
           email = parts[0].trim();
           password = parts[1].trim();
         } else {
-          setError(
-            `Format salah di baris: "${trimmedLine}". Harusnya email:password`
-          );
+          setError(`Format salah: "${trimmedLine}". Harusnya email:password`);
           parseError = true;
           return;
         }
@@ -131,50 +110,44 @@ export default function GaransiForm() {
           email = trimmedLine;
           password = sharedPassword.trim();
         } else {
-          setError(`Format email salah di baris: "${trimmedLine}"`);
+          setError(`Format email salah: "${trimmedLine}"`);
           parseError = true;
           return;
         }
       }
-
-      if (email && password && !parseError) {
+      if (email && password) {
         accountsToAdd.push({
           email,
           password,
           type: accountType as AccountType,
-          platform: platform as PlatformType,
+          platform: platform as PrismaPlatformType,
         });
-      }
+      } // Cast platform
     });
 
     if (parseError) {
       setIsLoading(false);
       return;
     }
-
     if (accountsToAdd.length === 0) {
-      setError("Tidak ada akun valid yang bisa ditambahkan.");
+      setError("Tidak ada akun valid.");
       setIsLoading(false);
       return;
     }
 
     try {
-      // --- PERBAIKAN ERROR 1 (Date vs String) ---
-      // Kita kirim sebagai string ISO, karena context/API mungkin memerlukannya
-      await addGaransiAccounts(accountsToAdd, expiresAt.toISOString());
-
+      await addGaransiAccounts(accountsToAdd, expiresAt.toISOString()); // Call context function
       toast({
         title: "🛡️ Akun Garansi Ditambahkan",
         description: `Berhasil menambahkan ${accountsToAdd.length} akun garansi baru.`,
         duration: 5000,
       });
-
-      // Reset form
       setAccountType("");
       setPlatform("");
       setAccountInput("");
       setSharedPassword("");
       setError("");
+      setExpiresAt(addDays(new Date(), 30)); // Reset expiresAt too
     } catch (err) {
       console.error("Error adding garansi accounts:", err);
       setError(
@@ -199,17 +172,15 @@ export default function GaransiForm() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-
       <Alert className="bg-blue-50 border-blue-200">
         <Info className="h-4 w-4" />
         <AlertDescription className="text-sm">
-          Akun yang ditambahkan di sini akan masuk ke database garansi terpisah.
-          Tanggal mulai garansi (`warrantyDate`) akan di-set ke hari ini secara
-          otomatis.
+          Akun akan masuk ke database garansi terpisah. Tanggal mulai garansi
+          di-set ke hari ini.
         </AlertDescription>
       </Alert>
 
-      {/* 1. Pilih Tipe Akun */}
+      {/* Tipe Akun */}
       <div className="space-y-2">
         <Label htmlFor="garansi-account-type" className="font-semibold">
           Tipe Akun
@@ -217,45 +188,50 @@ export default function GaransiForm() {
         <Select
           value={accountType}
           onValueChange={(value) => setAccountType(value as AccountType)}
+          disabled={isLoading}
         >
           <SelectTrigger
             id="garansi-account-type"
             className="h-12 border-gray-300"
           >
-            <SelectValue placeholder="Pilih tipe (Private/Sharing/VIP)" />
+            <SelectValue placeholder="Pilih tipe" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="private">Private</SelectItem>
             <SelectItem value="sharing">Sharing</SelectItem>
-            {/* --- PERBAIKAN ERROR 2 (Typo) --- */}
             <SelectItem value="vip">VIP</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* 2. DROPDOWN PLATFORM (BARU) */}
+      {/* Platform Dropdown Updated */}
       <div className="space-y-2">
         <Label htmlFor="garansi-platform" className="font-semibold">
           Platform
         </Label>
         <Select
           value={platform}
-          onValueChange={(value) => setPlatform(value as PlatformType)}
+          onValueChange={(value) => setPlatform(value as PrismaPlatformType)}
+          disabled={isLoading}
         >
           <SelectTrigger id="garansi-platform" className="h-12 border-gray-300">
-            <SelectValue placeholder="Pilih platform (Netflix/Vidio/dll)" />
+            <SelectValue placeholder="Pilih platform" />
           </SelectTrigger>
           <SelectContent className="max-h-60">
-            {platformOptions.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
+            {PLATFORM_LIST.map(
+              (
+                opt // Use PLATFORM_LIST
+              ) => (
+                <SelectItem key={opt.key} value={opt.key}>
+                  {opt.name}
+                </SelectItem>
+              )
+            )}
           </SelectContent>
         </Select>
       </div>
+      {/* End Platform Update */}
 
-      {/* 3. Opsi Mode Input */}
       <div className="space-y-2">
         <Label className="font-semibold">Mode Input Akun</Label>
         <div className="flex gap-4">
@@ -263,6 +239,7 @@ export default function GaransiForm() {
             type="button"
             variant={inputMode === "email_password" ? "default" : "outline"}
             onClick={() => setInputMode("email_password")}
+            disabled={isLoading}
           >
             Email:Password per Baris
           </Button>
@@ -270,13 +247,12 @@ export default function GaransiForm() {
             type="button"
             variant={inputMode === "email_only" ? "default" : "outline"}
             onClick={() => setInputMode("email_only")}
+            disabled={isLoading}
           >
             Email per Baris (Password Sama)
           </Button>
         </div>
       </div>
-
-      {/* 4. Input Akun (Email & Password) */}
       <div className="space-y-2">
         <Label htmlFor="garansi-account-input" className="font-semibold">
           {inputMode === "email_password"
@@ -289,19 +265,18 @@ export default function GaransiForm() {
           onChange={(e) => setAccountInput(e.target.value)}
           placeholder={
             inputMode === "email_password"
-              ? "contoh@email.com:password123\ncontohlain@email.com:passlain456"
-              : "contoh@email.com\ncontohlain@email.com"
+              ? "contoh@email.com:password123\n..."
+              : "contoh@email.com\n..."
           }
           className="min-h-[120px] border-gray-300"
           required
+          disabled={isLoading}
         />
         <p className="text-xs text-gray-500">
-          Pisahkan email dan password dengan titik dua (:), spasi, koma, atau
-          tab jika memilih mode Email:Password.
+          Pisahkan email dan password dengan :, spasi, koma, atau tab jika mode
+          Email:Password.
         </p>
       </div>
-
-      {/* 5. Input Shared Password (jika mode email_only) */}
       {inputMode === "email_only" && (
         <div className="space-y-2">
           <Label htmlFor="garansi-shared-password" className="font-semibold">
@@ -312,17 +287,16 @@ export default function GaransiForm() {
             type="text"
             value={sharedPassword}
             onChange={(e) => setSharedPassword(e.target.value)}
-            placeholder="Masukkan password yang sama untuk semua email di atas"
+            placeholder="Password sama untuk semua email di atas"
             className="h-12 border-gray-300"
             required={inputMode === "email_only"}
+            disabled={isLoading}
           />
         </div>
       )}
-
-      {/* 6. KALENDER DIPERBARUI (Menjadi EXPIRES AT) */}
       <div className="space-y-2">
         <Label htmlFor="garansi-date" className="font-semibold">
-          Tanggal Kadaluarsa (Masa Aktif Berakhir)
+          Tanggal Kadaluarsa
         </Label>
         <Popover>
           <PopoverTrigger asChild>
@@ -333,6 +307,7 @@ export default function GaransiForm() {
                 "w-full justify-start text-left font-normal h-12 border-gray-300",
                 !expiresAt && "text-muted-foreground"
               )}
+              disabled={isLoading}
             >
               <CalendarIcon className="mr-2 h-4 w-4" />
               {expiresAt ? format(expiresAt, "dd MMMM yyyy") : "Pilih tanggal"}
@@ -349,22 +324,17 @@ export default function GaransiForm() {
                 return date < today;
               }}
               defaultMonth={expiresAt || new Date()}
-              // --- PERBAIKAN ERROR 3 (Kalender) ---
-              captionLayout="dropdown" // <-- Diubah dari "dropdown-buttons"
-              fromYear={new Date().getFullYear()} // <-- Ditambahkan
+              captionLayout="dropdown"
+              fromYear={new Date().getFullYear()}
               toYear={new Date().getFullYear() + 5}
-              // --- AKHIR PERBAIKAN ---
               initialFocus
             />
           </PopoverContent>
         </Popover>
         <p className="text-xs text-gray-500">
-          Pilih tanggal kapan akun ini akan kadaluarsa. Tanggal mulai garansi
-          akan di-set ke hari ini.
+          Pilih tanggal kadaluarsa akun ini.
         </p>
       </div>
-
-      {/* 7. Tombol Submit */}
       <Button
         type="submit"
         className="w-full h-12 text-base font-semibold bg-blue-600 hover:bg-blue-700"

@@ -1,19 +1,18 @@
 // app/api/accounts/[id]/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import {
-  DatabaseService,
-  AccountType,
-  PlatformType,
-} from "@/lib/database-service";
-import { Prisma } from "@prisma/client"; // Import Prisma for error handling
+// Hapus PlatformType dari impor database-service
+// import { DatabaseService, AccountType, PlatformType } from "@/lib/database-service";
+import { DatabaseService } from "@/lib/database-service"; // Impor service saja
+// Impor Prisma untuk error handling dan PlatformType
+import { Prisma, PlatformType as PrismaPlatformType } from "@prisma/client";
 
 export const runtime = "nodejs"; // Prisma needs Node.js
 
 // --- PATCH: Update Akun Berdasarkan ID ---
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } } // Ambil ID dari params
+  { params }: { params: { id: string } }
 ) {
   try {
     const accountId = params.id;
@@ -26,33 +25,30 @@ export async function PATCH(
 
     const body = await req.json();
 
-    // Ambil data yang MUNGKIN diupdate (sesuai DatabaseService.updateAccount)
+    // Terima data dengan tipe dari Prisma
     const {
       email,
       password,
-      expiresAt, // Terima sebagai string ISO
-      // profiles, // Biasanya profiles tidak diupdate manual di sini
+      expiresAt, // Terima string ISO
       platform,
     }: {
       email?: string;
       password?: string;
       expiresAt?: string;
-      platform?: PlatformType;
+      platform?: PrismaPlatformType; // <-- Gunakan tipe Prisma
     } = body;
 
-    // Bangun objek data untuk dikirim ke service (hanya field yang ada)
+    // Bangun objek data untuk service (tipe platform sudah benar)
     const updateData: {
       email?: string;
       password?: string;
-      expiresAt?: Date; // Service butuh Date
-      platform?: PlatformType;
+      expiresAt?: Date;
+      platform?: PrismaPlatformType; // <-- Gunakan tipe Prisma
     } = {};
 
-    // Hati-hati dengan update email karena @unique
-    // Saran: Nonaktifkan edit email di frontend jika memungkinkan
     if (email) updateData.email = email;
     if (password) updateData.password = password;
-    if (platform) updateData.platform = platform; // TODO: Validasi platform jika perlu
+    if (platform) updateData.platform = platform; // Langsung assign
     if (expiresAt) {
       const expiresAtDate = new Date(expiresAt);
       if (isNaN(expiresAtDate.getTime())) {
@@ -64,7 +60,6 @@ export async function PATCH(
       updateData.expiresAt = expiresAtDate;
     }
 
-    // Cek jika tidak ada data valid untuk diupdate
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
         { error: "No valid fields provided for update." },
@@ -72,15 +67,14 @@ export async function PATCH(
       );
     }
 
-    console.log(`Updating account ${accountId} with data:`, updateData); // Log data update
+    console.log(`Updating account ${accountId} with data:`, updateData);
 
     // Panggil DatabaseService.updateAccount
     const updatedAccount = await DatabaseService.updateAccount(
       accountId,
-      updateData
+      updateData // Tipe platform sudah sesuai
     );
 
-    // Handle jika akun tidak ditemukan oleh service (misal findUnique mengembalikan null)
     if (!updatedAccount) {
       return NextResponse.json(
         { error: `Account with ID ${accountId} not found.` },
@@ -88,14 +82,12 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json(updatedAccount); // Kembalikan akun yang sudah diupdate
+    return NextResponse.json(updatedAccount);
   } catch (error: any) {
     console.error(`Error updating account ${params.id}:`, error);
-    // Handle error spesifik (misal email duplikat dari service)
     if (error.message.includes("already in use")) {
-      return NextResponse.json({ error: error.message }, { status: 409 }); // 409 Conflict
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
-    // Handle error jika akun tidak ditemukan (P2025 dari Prisma via service)
     if (error.message.includes("not found")) {
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
@@ -108,8 +100,8 @@ export async function PATCH(
 
 // --- DELETE: Hapus Akun Berdasarkan ID ---
 export async function DELETE(
-  req: NextRequest, // req mungkin tidak digunakan tapi tetap parameter standar
-  { params }: { params: { id: string } } // Ambil ID dari params
+  req: NextRequest,
+  { params }: { params: { id: string } }
 ) {
   try {
     const accountId = params.id;
@@ -122,22 +114,16 @@ export async function DELETE(
 
     console.log(`Attempting to delete account ${accountId}...`);
 
-    // Panggil DatabaseService.deleteAccount
-    // Fungsi ini sudah menggunakan transaksi untuk menghapus relasi
     await DatabaseService.deleteAccount(accountId);
 
     console.log(`Account ${accountId} deleted successfully.`);
 
-    // Kembalikan response sukses tanpa body (standard untuk DELETE)
-    // atau dengan pesan konfirmasi
-    // return new NextResponse(null, { status: 204 }); // 204 No Content
     return NextResponse.json(
       { message: `Account ${accountId} deleted successfully.` },
       { status: 200 }
-    ); // Atau 200 OK dengan pesan
+    );
   } catch (error: any) {
     console.error(`Error deleting account ${params.id}:`, error);
-    // Handle error jika akun tidak ditemukan (dari service)
     if (error.message.includes("not found")) {
       return NextResponse.json({ error: error.message }, { status: 404 });
     }

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/lib/auth"; // <-- Path diperbaiki
 import { useAccounts } from "@/contexts/account-context";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -17,20 +17,27 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Sparkles, Save, RefreshCw, LogOut } from "lucide-react";
+// Hapus import Save
+// import { Sparkles, Save, RefreshCw, LogOut } from "lucide-react";
+import { Sparkles, RefreshCw, LogOut } from "lucide-react"; // Import tanpa Save
 
-// Props title dan subtitle tidak lagi dibutuhkan karena header sekarang statis
 export function DashboardHeader() {
   const { logout } = useAuth();
-  const { saveAllData, refreshData } = useAccounts();
+  // Hapus saveAllData
+  // const { saveAllData, refreshData } = useAccounts();
+  const { refreshData } = useAccounts(); // Ambil refreshData saja
   const { toast } = useToast();
-  const [isSaving, setIsSaving] = useState(false);
+  // Hapus state isSaving
+  // const [isSaving, setIsSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Hapus fungsi handleSave
+  /*
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await saveAllData();
+      // Fungsi saveAllData tidak ada
+      // await saveAllData();
       toast({
         title: "💾 Data Saved",
         description: "All data has been synchronized with the database.",
@@ -45,6 +52,7 @@ export function DashboardHeader() {
       setIsSaving(false);
     }
   };
+  */
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -70,13 +78,11 @@ export function DashboardHeader() {
   };
 
   return (
-    // Menggunakan kelas dari contoh Anda untuk menciptakan efek kartu melayang
     <header className="zenith-card mx-4 mt-4 border-0 relative z-20">
       <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-        {/* Sisi Kiri Header */}
+        {/* Sisi Kiri Header (Tidak berubah) */}
         <div className="flex items-center space-x-4">
           <div className="p-2 bg-zenith-gradient rounded-xl">
-            {/* Menggunakan logo asli */}
             <Image
               src="/images/trustdigital-logo.jpg"
               alt="TrustDigital.ID Logo"
@@ -98,6 +104,8 @@ export function DashboardHeader() {
 
         {/* Sisi Kanan Header */}
         <div className="flex items-center space-x-3">
+          {/* --- HAPUS TOMBOL SAVE --- */}
+          {/*
           <Button
             aria-label="Manual save"
             title="Manual Save Data"
@@ -109,7 +117,10 @@ export function DashboardHeader() {
           >
             <Save className={`h-5 w-5 ${isSaving ? "animate-pulse" : ""}`} />
           </Button>
+          */}
+          {/* --- AKHIR HAPUS TOMBOL SAVE --- */}
 
+          {/* Tombol Refresh (Tidak berubah) */}
           <Button
             aria-label="Refresh data"
             title="Refresh Data"
@@ -124,6 +135,7 @@ export function DashboardHeader() {
             />
           </Button>
 
+          {/* Tombol Logout (Tidak berubah) */}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button

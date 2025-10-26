@@ -5,7 +5,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-// --- IMPORTS TAMBAHAN ---
 import {
   Select,
   SelectContent,
@@ -22,56 +21,33 @@ import {
 } from "@/components/ui/popover";
 import { format, addDays } from "date-fns";
 import { cn } from "@/lib/utils";
-// Impor tipe dari service, bukan context
-import type { AccountType, PlatformType } from "@/lib/database-service";
-import { useAccounts } from "@/contexts/account-context"; // Import useAccounts
-// --- AKHIR IMPORTS TAMBAHAN ---
-
-// --- OPSI PLATFORM (Sama seperti di garansi-form) ---
-const platformOptions: { value: PlatformType; label: string }[] = [
-  { value: "NETFLIX", label: "Netflix" },
-  { value: "DISNEY", label: "Disney+" },
-  { value: "HBO", label: "HBO Go" },
-  { value: "PRIMEVIDEO", label: "Prime Video" },
-  { value: "VIDIO_DIAMOND_MOBILE", label: "Vidio Diamond Mobile" },
-  { value: "VIDIO_PLATINUM", label: "Vidio Platinum" },
-  { value: "VIU_1_BULAN", label: "Viu (1 Bulan)" },
-  { value: "WE_TV", label: "WeTV" },
-  { value: "YOUTUBE_1_BULAN", label: "YouTube (1 Bulan)" },
-  { value: "LOKLOK", label: "LokLok" },
-  { value: "SPOTIFY_FAMPLAN_1_BULAN", label: "Spotify 1 Bulan" },
-  { value: "SPOTIFY_FAMPLAN_2_BULAN", label: "Spotify 2 Bulan" },
-  { value: "CANVA_1_BULAN", label: "Canva (1 Bulan)" },
-  { value: "CANVA_1_TAHUN", label: "Canva (1 Tahun)" },
-  { value: "CHAT_GPT", label: "Chat GPT" },
-  { value: "CAPCUT", label: "Capcut" },
-];
-// --- AKHIR OPSI PLATFORM ---
+// Import tipe AccountType dari service, PlatformType dari Prisma
+import type { AccountType } from "@/lib/database-service";
+import type { PlatformType as PrismaPlatformType } from "@prisma/client";
+import { useAccounts } from "@/contexts/account-context";
+// Import constants for dropdown
+import { PLATFORM_LIST } from "@/lib/constants";
 
 interface AccountFormProps {
-  type: AccountType; // Tipe akun sudah ditentukan dari props
-  onSuccess?: () => void; // Callback saat sukses
+  type: AccountType;
+  onSuccess?: () => void;
 }
 
 export default function AccountForm({ type, onSuccess }: AccountFormProps) {
-  const { addAccount } = useAccounts(); // Gunakan fungsi addAccount dari context
-  // --- STATE DIPERBARUI ---
+  const { addAccount } = useAccounts();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [platform, setPlatform] = useState<PlatformType | "">(""); // State baru
+  const [platform, setPlatform] = useState<PrismaPlatformType | "">(""); // Use Prisma type
   const [expiresAt, setExpiresAt] = useState<Date | undefined>(
-    addDays(new Date(), 30) // State baru, default 30 hari
+    addDays(new Date(), 30)
   );
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null); // State untuk error
-  // --- AKHIR STATE ---
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError(null); // Reset error
-
-    // --- Validasi Input Baru ---
+    setError(null);
     if (!platform) {
       setError("Platform harus dipilih.");
       setIsLoading(false);
@@ -82,49 +58,32 @@ export default function AccountForm({ type, onSuccess }: AccountFormProps) {
       setIsLoading(false);
       return;
     }
-    // --- Akhir Validasi Baru ---
-
     try {
-      // --- Logika pembuatan profil DIHAPUS ---
-
-      // --- PANGGIL addAccount DENGAN PAYLOAD BARU ---
-      // Kirim data yang dibutuhkan oleh API POST /api/accounts
       const newAccount = await addAccount({
-        // addAccount di context mengembalikan Account | null
         email,
         password,
-        type, // Type dari props
-        platform: platform as PlatformType, // Platform dari state
-        expiresAt: expiresAt.toISOString(), // Kirim sebagai string ISO
-        // profiles TIDAK dikirim, backend yang buat
+        type,
+        platform: platform as PrismaPlatformType,
+        expiresAt: expiresAt.toISOString(),
       });
-      // --- AKHIR PEMANGGILAN ---
-
       if (newAccount) {
-        // Cek apakah akun berhasil dibuat (tidak null)
-        // Reset form jika sukses
         setEmail("");
         setPassword("");
         setPlatform("");
         setExpiresAt(addDays(new Date(), 30));
-        setError(null); // Clear error
-        onSuccess?.(); // Panggil onSuccess jika ada (misal: menutup dialog)
-        // Toast sukses sudah dihandle oleh context
+        setError(null);
+        onSuccess?.();
       } else {
-        // Jika addAccount mengembalikan null, artinya gagal
-        // Context sudah menampilkan toast error, kita bisa set error lokal jika perlu
         setError("Gagal menambahkan akun. Periksa log atau coba lagi.");
       }
     } catch (err: any) {
       console.error("Error submitting account form:", err);
-      // Set error state (context mungkin sudah handle toast)
       setError(err.message || "Terjadi kesalahan tak terduga.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Fungsi untuk mendapatkan nama tipe akun yang lebih ramah
   const getFriendlyTypeName = (accountType: AccountType): string => {
     switch (accountType) {
       case "private":
@@ -139,16 +98,12 @@ export default function AccountForm({ type, onSuccess }: AccountFormProps) {
   };
 
   return (
-    // Form tidak lagi dibungkus Card jika dipakai di dialog
     <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-      {/* Tampilkan error jika ada */}
       {error && (
         <p className="text-sm text-red-600 px-1 py-2 bg-red-50 rounded border border-red-200">
           {error}
         </p>
       )}
-
-      {/* Input Email */}
       <div className="space-y-2">
         <Label htmlFor={`${type}-email`}>Email</Label>
         <Input
@@ -162,8 +117,6 @@ export default function AccountForm({ type, onSuccess }: AccountFormProps) {
           disabled={isLoading}
         />
       </div>
-
-      {/* Input Password */}
       <div className="space-y-2">
         <Label htmlFor={`${type}-password`}>Password</Label>
         <Input
@@ -177,30 +130,31 @@ export default function AccountForm({ type, onSuccess }: AccountFormProps) {
           disabled={isLoading}
         />
       </div>
-
-      {/* Input Platform (BARU) */}
+      {/* Platform Dropdown Updated */}
       <div className="space-y-2">
         <Label htmlFor={`${type}-platform`}>Platform</Label>
         <Select
           value={platform}
-          onValueChange={(value) => setPlatform(value as PlatformType)}
+          onValueChange={(value) => setPlatform(value as PrismaPlatformType)}
           disabled={isLoading}
         >
           <SelectTrigger id={`${type}-platform`} className="border-gray-300">
-            <SelectValue placeholder="Pilih platform (Netflix/Vidio/dll)" />
+            <SelectValue placeholder="Pilih platform" />
           </SelectTrigger>
           <SelectContent className="max-h-60">
-            {platformOptions.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
+            {PLATFORM_LIST.map(
+              (
+                opt // Use PLATFORM_LIST
+              ) => (
+                <SelectItem key={opt.key} value={opt.key}>
+                  {opt.name}
+                </SelectItem>
+              )
+            )}
           </SelectContent>
         </Select>
       </div>
-      {/* Akhir Input Platform */}
-
-      {/* Input Expires At (BARU) */}
+      {/* End Platform Update */}
       <div className="space-y-2">
         <Label htmlFor={`${type}-expiresAt`}>Tanggal Kadaluarsa</Label>
         <Popover>
@@ -224,31 +178,26 @@ export default function AccountForm({ type, onSuccess }: AccountFormProps) {
               selected={expiresAt}
               onSelect={setExpiresAt}
               disabled={(date) => {
-                // Hanya izinkan tanggal hari ini & masa depan
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
                 return date < today;
               }}
               defaultMonth={expiresAt || new Date()}
-              fromMonth={new Date()} // Mulai dari bulan ini
-              toYear={new Date().getFullYear() + 5} // Izinkan 5 tahun ke depan
-              captionLayout="dropdown" // Layout dropdown
+              fromMonth={new Date()}
+              toYear={new Date().getFullYear() + 5}
+              captionLayout="dropdown"
               initialFocus
             />
           </PopoverContent>
         </Popover>
       </div>
-      {/* Akhir Input Expires At */}
-
-      {/* Tombol Submit */}
       <div className="pt-2">
         <Button
           type="submit"
-          className="w-full bg-blue-600 hover:bg-blue-700" // Sesuaikan warna jika perlu
+          className="w-full bg-blue-600 hover:bg-blue-700"
           disabled={isLoading}
         >
-          {isLoading ? "Adding..." : `Add ${getFriendlyTypeName(type)} Account`}{" "}
-          {/* Gunakan nama ramah */}
+          {isLoading ? "Adding..." : `Add ${getFriendlyTypeName(type)} Account`}
         </Button>
       </div>
     </form>
