@@ -382,9 +382,6 @@ export class DatabaseService {
         password: a.password,
         type: a.type as PrismaAccountType,
         platform: a.platform,
-        profiles: generateProfiles(
-          a.type as PrismaAccountType
-        ) as unknown as Prisma.InputJsonValue,
         expiresAt: expiresAt,
         warrantyDate: now,
         isActive: true,
