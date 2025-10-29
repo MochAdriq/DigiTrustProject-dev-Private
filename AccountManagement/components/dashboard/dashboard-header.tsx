@@ -121,7 +121,7 @@ export function DashboardHeader() {
           {/* --- AKHIR HAPUS TOMBOL SAVE --- */}
 
           {/* Tombol Refresh (Tidak berubah) */}
-          <Button
+          {/* <Button
             aria-label="Refresh data"
             title="Refresh Data"
             variant="ghost"
@@ -133,7 +133,7 @@ export function DashboardHeader() {
             <RefreshCw
               className={`h-5 w-5 ${isRefreshing ? "animate-spin" : ""}`}
             />
-          </Button>
+          </Button> */}
 
           {/* Tombol Logout (Tidak berubah) */}
           <AlertDialog>

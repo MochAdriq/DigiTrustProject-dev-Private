@@ -353,7 +353,7 @@ export default function BulkImport() {
         </Button>
       </form>
       {/* Info Panel (tidak berubah) */}
-      <div className="border border-gray-200 rounded-lg p-6">
+      {/* <div className="border border-gray-200 rounded-lg p-6">
         <h4 className="font-bold mb-4 text-gray-800 text-lg">
           💡 Info Mode Import:
         </h4>
@@ -376,7 +376,7 @@ export default function BulkImport() {
             </ul>
           </div>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }

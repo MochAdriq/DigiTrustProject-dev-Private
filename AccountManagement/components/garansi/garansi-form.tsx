@@ -33,7 +33,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 // Import constants for dropdown
 import { PLATFORM_LIST } from "@/lib/constants";
 
-export default function GaransiForm() {
+interface GaransiFormProps {
+  onSuccess?: () => void; // <-- Tambahkan ini
+}
+
+export default function GaransiForm({ onSuccess }: GaransiFormProps) {
   const { addGaransiAccounts } = useAccounts();
   const { toast } = useToast();
 
@@ -148,6 +152,8 @@ export default function GaransiForm() {
       setSharedPassword("");
       setError("");
       setExpiresAt(addDays(new Date(), 30)); // Reset expiresAt too
+
+      onSuccess?.(); // <-- Panggil onSuccess di sini
     } catch (err) {
       console.error("Error adding garansi accounts:", err);
       setError(
