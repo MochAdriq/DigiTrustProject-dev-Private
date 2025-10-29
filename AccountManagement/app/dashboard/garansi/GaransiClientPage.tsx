@@ -297,7 +297,6 @@ function GaransiView() {
                   />
                 </PopoverContent>
               </Popover>
-              {/* Tambahkan tombol Clear Filter Tanggal */}
               {selectedDate && (
                 <Button
                   variant="ghost"
@@ -315,11 +314,9 @@ function GaransiView() {
               </p>
             </div>
           </div>
-          {/* Akhir Bagian Filter */}
 
           {isLoadingView && <LoadingSpinner />}
 
-          {/* === TAMPILKAN HASIL === */}
           {hasResultsToShow && (
             <div className="space-y-4">
               <div className="flex justify-between items-center">
@@ -375,7 +372,6 @@ function GaransiView() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {/* Render HANYA data yang sudah dipaginasi */}
                     {paginatedAccounts.map((account) => {
                       const daysLeft = getRemainingDays(account);
                       const isExpired = daysLeft < 0;
@@ -432,7 +428,6 @@ function GaransiView() {
                                 )
                               : "-"}{" "}
                           </TableCell>
-                          {/* Tambahkan whitespace-nowrap di sel data status */}
                           <TableCell>
                             <Badge
                               variant={statusVariant}
@@ -462,7 +457,6 @@ function GaransiView() {
                 </Table>
               </div>
 
-              {/* --- Tambahkan Komponen Pagination Di Sini --- */}
               {totalPages > 1 && (
                 <Pagination className="mt-6">
                   <PaginationContent>
@@ -482,9 +476,7 @@ function GaransiView() {
                       />
                     </PaginationItem>
 
-                    {/* Logika Tampilan Nomor Halaman (contoh sederhana) */}
                     {Array.from({ length: totalPages }, (_, i) => i + 1)
-                      // Batasi tampilan nomor halaman jika terlalu banyak (opsional)
                       .filter(
                         (page) =>
                           page === 1 ||
@@ -534,12 +526,9 @@ function GaransiView() {
                   </PaginationContent>
                 </Pagination>
               )}
-              {/* --- Akhir Komponen Pagination --- */}
             </div>
           )}
-          {/* === AKHIR TAMPILKAN HASIL === */}
 
-          {/* Tampilan Hasil Filter Kosong */}
           {isFilteredNoResults && (
             <div className="text-center py-8 text-gray-500">
               <p>
@@ -549,7 +538,6 @@ function GaransiView() {
             </div>
           )}
 
-          {/* Tampilan Awal / Default Kosong */}
           {isInitialLoadEmpty && (
             <div className="text-center py-8 text-gray-500">
               <Database className="h-8 w-8 mx-auto mb-2 opacity-50" />

@@ -28,7 +28,6 @@ import {
 import LoadingSpinner from "../shared/loading-spinner";
 import { useAuth } from "@/lib/auth"; // <-- Path diperbaiki
 import type { Account, PlatformType } from "@prisma/client";
-// Import constants
 import { PLATFORM_DISPLAY_NAMES } from "@/lib/constants";
 
 import {
@@ -40,6 +39,13 @@ import {
   PaginationNext,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
+
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // Helper for Profile type
 type Profile = { profile: string; pin: string; used: boolean };
@@ -112,20 +118,14 @@ export default function AccountList({ type }: AccountListProps) {
     try {
       await deleteAccount(accountIdToDelete);
 
-      // ▼▼▼ PENYESUAIAN PAGINATION SETELAH DELETE ▼▼▼
-      // Hitung ulang total item SETELAH delete (asumsi deleteAccount berhasil)
       const newTotalItems = sortedAccounts.length - 1;
       const newTotalPages = Math.ceil(newTotalItems / ITEMS_PER_PAGE);
 
-      // Jika halaman saat ini lebih besar dari total halaman baru (misal: hapus item terakhir di halaman 3)
-      // dan total halaman baru masih lebih dari 0
       if (currentPage > newTotalPages && newTotalPages > 0) {
         setCurrentPage(newTotalPages); // Mundur ke halaman terakhir yang baru
       } else if (newTotalItems === 0) {
         setCurrentPage(1); // Reset ke halaman 1 jika tidak ada item tersisa
       }
-      // Jika tidak, tetap di halaman saat ini (data akan di-refresh oleh slice)
-      // ▼▼▼ SELESAI PENYESUAIAN ▼▼▼
     } catch (error) {
       console.error("Error during delete confirmation:", error);
     } finally {
@@ -144,8 +144,6 @@ export default function AccountList({ type }: AccountListProps) {
   const totalItems = sortedAccounts.length;
   const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
 
-  // ▼▼▼ EFEK UNTUK RESET HALAMAN JIKA FILTER BERUBAH ▼▼▼
-  // (Berguna jika 'type' berubah dari props dan halaman saat ini jadi tidak valid)
   useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) {
       setCurrentPage(totalPages); // Set ke halaman terakhir yang valid
@@ -153,21 +151,16 @@ export default function AccountList({ type }: AccountListProps) {
       setCurrentPage(1); // Set ke 1 jika tidak ada data
     }
   }, [currentPage, totalPages]);
-  // ▲▲▲ SELESAI EFEK ▲▲▲
 
-  // Hitung index awal dan akhir untuk slice
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
 
-  // Ambil data hanya untuk halaman saat ini
   const paginatedAccounts = sortedAccounts.slice(startIndex, endIndex);
-  // ▲▲▲ SELESAI LOGIKA PAGINATION ▲▲▲
 
   if (isLoading) {
     return <LoadingSpinner />;
   }
 
-  // Helper function to get platform display name
   const getPlatformDisplayName = (
     platformKey: PlatformType | null | undefined
   ): string => {
@@ -193,7 +186,6 @@ export default function AccountList({ type }: AccountListProps) {
               </p>
             </div>
           ) : (
-            // ▼▼▼ KONTEN JIKA ADA DATA (TABEL) ▼▼▼
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -215,7 +207,6 @@ export default function AccountList({ type }: AccountListProps) {
                     let totalProfiles = 0;
                     let profileDisplay = "-/-";
 
-                    // ▼▼▼ Logika parsing profile yang lebih aman ▼▼▼
                     let profilesArray: Profile[] = [];
                     if (typeof account.profiles === "string") {
                       try {
@@ -227,11 +218,9 @@ export default function AccountList({ type }: AccountListProps) {
                         profileDisplay = "Error"; // Tampilkan error jika JSON tidak valid
                       }
                     } else if (Array.isArray(account.profiles)) {
-                      // Jika sudah berbentuk array (misal dari context/state)
                       profilesArray = account.profiles;
                     }
 
-                    // Pastikan profilesArray adalah array sebelum di-loop
                     if (Array.isArray(profilesArray)) {
                       totalProfiles = profilesArray.length;
                       availableProfiles = profilesArray.filter(
@@ -242,10 +231,8 @@ export default function AccountList({ type }: AccountListProps) {
                       ).length;
                       profileDisplay = `${availableProfiles}/${totalProfiles}`;
                     } else if (profileDisplay !== "Error") {
-                      // Jika bukan string JSON, bukan array, dan belum error
                       profileDisplay = "N/A"; // Data tidak dikenal
                     }
-                    // ▲▲▲ Selesai logika parsing profile ▲▲▲
 
                     const daysLeft = getRemainingDays(account);
                     const isExpired = daysLeft < 0;
@@ -262,13 +249,11 @@ export default function AccountList({ type }: AccountListProps) {
                         <TableCell className="text-sm">
                           {account.password}
                         </TableCell>
-                        {/* Platform Cell Updated */}
                         <TableCell className="text-xs">
                           <Badge variant="outline">
                             {getPlatformDisplayName(account.platform)}
                           </Badge>
                         </TableCell>
-                        {/* End Platform Cell */}
                         <TableCell className="text-center">
                           <Badge
                             variant={
@@ -320,42 +305,67 @@ export default function AccountList({ type }: AccountListProps) {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end space-x-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={
-                                isAdmin ? () => handleEdit(account) : undefined
-                              }
-                              className={`h-7 w-7 text-blue-600 hover:bg-blue-100 ${
-                                !isAdmin && "opacity-50 cursor-not-allowed"
-                              }`}
-                              disabled={!isAdmin}
-                              aria-disabled={!isAdmin}
-                              title="Edit Account"
-                            >
-                              <Edit className="h-4 w-4" />
-                              <span className="sr-only">Edit</span>
-                            </Button>{" "}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={
-                                isAdmin
-                                  ? () => handleDelete(account.id)
-                                  : undefined
-                              }
-                              className={`h-7 w-7 text-red-600 hover:bg-red-100 ${
-                                !isAdmin && "opacity-50 cursor-not-allowed"
-                              }`}
-                              disabled={!isAdmin}
-                              aria-disabled={!isAdmin}
-                              title="Delete Account"
-                            >
-                              <Trash className="h-4 w-4" />
-                              <span className="sr-only">Delete</span>
-                            </Button>
-                          </div>
+                          <TooltipProvider delayDuration={100}>
+                            <div className="flex justify-end space-x-1">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={
+                                      isAdmin
+                                        ? () => handleEdit(account)
+                                        : undefined
+                                    }
+                                    className={`h-7 w-7 text-blue-600 hover:bg-blue-100 ${
+                                      !isAdmin &&
+                                      "opacity-50 cursor-not-allowed"
+                                    }`}
+                                    aria-disabled={!isAdmin}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                    <span className="sr-only">Edit</span>
+                                  </Button>
+                                </TooltipTrigger>
+                                {!isAdmin && (
+                                  <TooltipContent>
+                                    <p>
+                                      Anda tidak memiliki akses untuk fitur ini
+                                    </p>
+                                  </TooltipContent>
+                                )}
+                              </Tooltip>
+
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={
+                                      isAdmin
+                                        ? () => handleDelete(account.id)
+                                        : undefined
+                                    }
+                                    className={`h-7 w-7 text-red-600 hover:bg-red-100 ${
+                                      !isAdmin &&
+                                      "opacity-50 cursor-not-allowed"
+                                    }`}
+                                    aria-disabled={!isAdmin}
+                                  >
+                                    <Trash className="h-4 w-4" />
+                                    <span className="sr-only">Delete</span>
+                                  </Button>
+                                </TooltipTrigger>
+                                {!isAdmin && (
+                                  <TooltipContent>
+                                    <p>
+                                      Anda tidak memiliki akses untuk fitur ini
+                                    </p>
+                                  </TooltipContent>
+                                )}
+                              </Tooltip>
+                            </div>
+                          </TooltipProvider>
                         </TableCell>
                       </TableRow>
                     );
