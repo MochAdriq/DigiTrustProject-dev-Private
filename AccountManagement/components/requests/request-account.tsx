@@ -24,6 +24,7 @@ import {
   Loader2,
   UserCheck,
   List,
+  MessageSquare, // <-- Impor ikon baru
 } from "lucide-react"; // Tambah ikon
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
@@ -48,13 +49,16 @@ interface Profile {
   used: boolean;
 }
 
+// --- PERUBAHAN: Tipe lokal dirombak ---
 // Tipe lokal untuk detail hasil assignment yang ditampilkan
-// Kita butuh profileName dari hasil assignment backend
 interface AssignmentResultDetails extends Account {
   assignedProfileName: string; // Nama profil yg dipilih backend
   assignedProfilePin: string; // Pin profil yg dipilih backend
   assignedCustomerIdentifier: string;
+  whatsappAccountName?: string; // Nama WA yg dipakai (cth: WA META)
+  whatsappAccountNum?: string; // Nomor WA yg dipakai (cth: 0812...)
 }
+// --- AKHIR PERUBAHAN ---
 
 // Helper parse Profiles (tidak berubah)
 function parseProfiles(profilesData: unknown): Profile[] {
@@ -100,7 +104,7 @@ export default function RequestAccount() {
     isCustomerIdentifierUsed, // Cek customer
     addCustomerAssignment, // Assign akun (backend pilih profil)
     getRemainingDays, // Helper
-    getAvailableProfileCount, // Untuk display stok total
+    whatsappAccounts, // <-- PERUBAHAN: Ambil daftar WA
   } = useAccounts();
 
   // --- States ---
@@ -109,6 +113,8 @@ export default function RequestAccount() {
     PrismaPlatformType | ""
   >(""); // Platform yg dipilih
   const [customerIdentifier, setCustomerIdentifier] = useState("");
+  // const [customerWhatsapp, setCustomerWhatsapp] = useState(""); // <-- DIHAPUS
+  const [selectedWaId, setSelectedWaId] = useState<string>(""); // <-- PERUBAHAN: State baru
   const [availableAccounts, setAvailableAccounts] = useState<Account[]>([]); // Daftar akun dari API
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
     null
@@ -241,6 +247,15 @@ export default function RequestAccount() {
       });
       return;
     }
+    // Validasi WA (opsional, bisa ditambahkan)
+    if (!selectedWaId) {
+      toast({
+        title: "Error",
+        description: "Pilih WA Operator yang digunakan",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsAssigning(true);
     setAssignmentResult(null);
@@ -253,10 +268,12 @@ export default function RequestAccount() {
       if (!selectedAccount)
         throw new Error("Akun terpilih tidak ditemukan. Refresh data?");
 
-      // 3. Siapkan payload (tidak berubah)
+      // 3. Siapkan payload (PERUBAHAN)
       const operatorUsername = currentUser?.username || "Unknown";
       const assignmentPayload: AddCustomerAssignmentPayload = {
         customerIdentifier: customerIdentifier.trim(),
+        // customerWhatsapp: customerWhatsapp.trim() || undefined, // <-- DIHAPUS
+        whatsappAccountId: selectedWaId || undefined, // <-- DIGANTI
         accountId: selectedAccount.id,
         accountEmail: selectedAccount.email,
         accountType: accountType,
@@ -320,12 +337,23 @@ export default function RequestAccount() {
         );
       }
 
-      // 6. Sukses! Siapkan detail lengkap untuk ditampilkan
+      // --- PERUBAHAN: Cari detail WA yang dipilih ---
+      const selectedWaAccount = whatsappAccounts.find(
+        (wa) => wa.id === selectedWaId
+      );
+      const waName = selectedWaAccount?.name || "N/A";
+      const waNumber = selectedWaAccount?.number || "N/A";
+      // --- AKHIR PERUBAHAN ---
+
+      // 6. Sukses! Siapkan detail lengkap untuk ditampilkan (PERUBAHAN)
       const details: AssignmentResultDetails = {
         ...selectedAccount,
         assignedProfileName: newAssignmentResult.profileName,
         assignedProfilePin: assignedProfileData.pin,
         assignedCustomerIdentifier: customerIdentifier.trim(),
+        // customerWhatsapp: customerWhatsapp.trim() || undefined, // <-- DIHAPUS
+        whatsappAccountName: waName, // <-- DIGANTI
+        whatsappAccountNum: waNumber, // <-- DIGANTI
       };
 
       // --- LOG SEBELUM SET STATE ---
@@ -345,10 +373,9 @@ export default function RequestAccount() {
       });
 
       setSelectedAccountId(null); // Reset pilihan akun
-      // Opsional: Refresh ulang daftar akun tersedia setelah sukses
-      // const updatedAvailable = await getAvailableAccounts(selectedPlatform, accountType);
-      // setAvailableAccounts(updatedAvailable);
-      // if (updatedAvailable.length === 0) setStockDepleted(true);
+      // Reset pilihan WA dan Customer
+      setSelectedWaId("");
+      setCustomerIdentifier("");
     } catch (error: any) {
       console.error("[RequestAccount] Error caught in handleRequest:", error); // <-- Log 10: Tangkap error apa pun
       toast({
@@ -387,7 +414,7 @@ export default function RequestAccount() {
     return PLATFORM_DISPLAY_NAMES[key] || platformKey;
   };
 
-  // --- Copy function (tidak berubah) ---
+  // --- PERUBAHAN: Copy function diupdate ---
   const copyDetailsToClipboard = () => {
     if (!assignmentResult) return;
     const platformName = getPlatformDisplayName(assignmentResult.platform);
@@ -404,6 +431,13 @@ export default function RequestAccount() {
       assignmentResult.assignedProfilePin
     }\nTipe: ${accountTypeFormatted}\n📱 Customer: ${
       assignmentResult.assignedCustomerIdentifier
+    }${
+      // --- PERUBAHAN ---
+      assignmentResult.whatsappAccountName &&
+      assignmentResult.whatsappAccountName !== "N/A"
+        ? `\n📞 WA Operator: ${assignmentResult.whatsappAccountName} (${assignmentResult.whatsappAccountNum})`
+        : ""
+      // --- AKHIR PERUBAHAN ---
     }\n👨‍💼 Operator: ${
       currentUser?.username || "Unknown"
     }\n⏱️ Berlaku sampai: ${formatExpirationDate(
@@ -416,6 +450,7 @@ export default function RequestAccount() {
       description: `Detail akun ${platformName} disalin!`,
     });
   };
+  // --- AKHIR PERUBAHAN ---
 
   // --- JSX (tidak berubah) ---
   return (
@@ -486,7 +521,7 @@ export default function RequestAccount() {
             {/* 3. Customer Info */}
             <div className="space-y-2">
               <Label htmlFor="customer-identifier" className="font-semibold">
-                3. Info Customer
+                3. Info Customer (Nama / ID)
               </Label>
               <div className="relative">
                 <Input
@@ -494,7 +529,7 @@ export default function RequestAccount() {
                   type="text"
                   value={customerIdentifier}
                   onChange={(e) => setCustomerIdentifier(e.target.value)}
-                  placeholder="No. HP / Nama"
+                  placeholder="Nama Customer"
                   className={`h-11 pr-10 ${
                     customerError
                       ? "border-red-500 focus-visible:ring-red-500"
@@ -516,11 +551,43 @@ export default function RequestAccount() {
               )}
             </div>
 
+            {/* --- PERUBAHAN: Input Teks diganti Dropdown --- */}
+            <div className="space-y-2">
+              <Label htmlFor="wa-select" className="font-semibold">
+                4. Pilih WA Operator
+              </Label>
+              <Select
+                value={selectedWaId}
+                onValueChange={(value) => setSelectedWaId(value)}
+                disabled={isAssigning || isFetchingAccounts}
+              >
+                <SelectTrigger id="wa-select" className="h-11">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-gray-500" />
+                    <SelectValue placeholder="Pilih WA yang dipakai..." />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {whatsappAccounts.length === 0 && (
+                    <SelectItem value="loading" disabled>
+                      Memuat data WA...
+                    </SelectItem>
+                  )}
+                  {whatsappAccounts.map((wa) => (
+                    <SelectItem key={wa.id} value={wa.id}>
+                      {wa.name} ({wa.number})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {/* --- AKHIR PERUBAHAN --- */}
+
             {/* 4. Pilih AKUN (BUKAN PROFIL) */}
             {selectedPlatform && accountType && (
               <div className="space-y-3 border rounded-md p-4 bg-gray-50">
                 <Label className="font-semibold block mb-2">
-                  4. Pilih Akun Tersedia
+                  5. Pilih Akun Tersedia
                 </Label>
                 {isFetchingAccounts ? (
                   <div className="flex items-center justify-center h-20 text-gray-500">
@@ -600,6 +667,7 @@ export default function RequestAccount() {
                 !selectedPlatform ||
                 !customerIdentifier ||
                 !!customerError ||
+                !selectedWaId || // <-- PERUBAHAN: Validasi WA ID
                 !selectedAccountId ||
                 stockDepleted
               }
@@ -624,7 +692,7 @@ export default function RequestAccount() {
                 <h3 className="font-semibold text-lg text-center text-green-700">
                   ✅ Berhasil Ditugaskan!
                 </h3>
-                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md font-mono text-xs whitespace-pre-wrap border border-gray-200 dark:border-gray-700 max-h-80 overflow-y-auto">
+                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md font-mono text-xs whitespace-pre-wrap border border-gray-200 dark:border-gray-700 max-h-96 overflow-y-auto">
                   {/* Template Teks Hasil Assignment */}
                   {`!!! ${getPlatformDisplayName(
                     assignmentResult.platform
@@ -637,6 +705,13 @@ export default function RequestAccount() {
                     assignmentResult.type.slice(1)
                   }\n📱 Customer: ${
                     assignmentResult.assignedCustomerIdentifier
+                  }${
+                    // --- PERUBAHAN: Template Teks dirombak ---
+                    assignmentResult.whatsappAccountName &&
+                    assignmentResult.whatsappAccountName !== "N/A"
+                      ? `\n📞 WA Operator: ${assignmentResult.whatsappAccountName} (${assignmentResult.whatsappAccountNum})`
+                      : ""
+                    // --- AKHIR PERUBAHAN ---
                   }\n👨‍💼 Operator: ${
                     currentUser?.username || "Unknown"
                   }\n⏱️ Berlaku sampai: ${formatExpirationDate(

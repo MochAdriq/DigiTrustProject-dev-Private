@@ -31,6 +31,7 @@ import {
   ShoppingCart,
   Star,
   PlusCircle,
+  MessageSquare, // <-- PERUBAHAN: Ikon baru
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,13 +42,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import AccountSearch from "@/components/accounts/account-search";
-// --- PERBAIKAN IMPOR ---
 import { useAccounts } from "@/contexts/account-context"; // Impor hook useAccounts
 import type { AccountType } from "@prisma/client"; // Impor AccountType dari Prisma
-// --- AKHIR PERBAIKAN ---
 import LoadingSpinner from "../shared/loading-spinner";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth"; // Path sudah benar
+
+import WhatsappManagement from "@/components/whatsapp/WhatsappManagement"; // <-- Nama file diperbaiki
 
 export default function DashboardTabs() {
   const { user } = useAuth();
@@ -65,22 +66,11 @@ export default function DashboardTabs() {
   const [isActivityLogsOpen, setIsActivityLogsOpen] = useState(false);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  // State currentUser tidak lagi dibutuhkan, langsung pakai 'user' dari useAuth
-  // const [currentUser, setCurrentUser] = useState<any>(null);
+  // --- PERUBAHAN: State baru untuk dialog WA ---
+  const [isWhatsappManagementOpen, setIsWhatsappManagementOpen] =
+    useState(false);
+  // --- AKHIR PERUBAHAN ---
 
-  // useEffect untuk currentUser tidak lagi dibutuhkan
-  /*
-  useEffect(() => {
-    const user = localStorage.getItem("currentUser");
-    if (user) {
-      const parsedUser = JSON.parse(user);
-      // setCurrentUser(parsedUser); // Tidak perlu
-      if (parsedUser.role === "admin") {
-        setActiveTab("private"); // Set default tab admin bisa tetap di sini
-      }
-    }
-  }, []);
-  */
   // Opsional: Set default tab admin berdasarkan 'user' dari useAuth
   useEffect(() => {
     if (user?.role === "admin") {
@@ -299,6 +289,43 @@ export default function DashboardTabs() {
                         <UserManagement />
                       </DialogContent>
                     </Dialog>
+
+                    {/* --- PERUBAHAN: Tombol & Dialog Manajemen WA --- */}
+                    <Dialog
+                      open={isWhatsappManagementOpen}
+                      onOpenChange={setIsWhatsappManagementOpen}
+                    >
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="text-green-600 border-green-300 hover:bg-green-600 hover:text-white" // Warna hijau
+                              disabled={!isAdmin}
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {isAdmin ? (
+                            <p>Manajemen Akun WA</p>
+                          ) : (
+                            <p>Anda tidak punya akses.</p>
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>
+                            📱 Manajemen Akun WhatsApp Operator
+                          </DialogTitle>
+                        </DialogHeader>
+                        <WhatsappManagement /> {/* <-- Komponen baru */}
+                      </DialogContent>
+                    </Dialog>
+                    {/* --- AKHIR PERUBAHAN --- */}
                   </div>
                 </>
               )}

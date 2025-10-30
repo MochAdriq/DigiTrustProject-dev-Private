@@ -99,14 +99,18 @@ export default function CustomerStatistics() {
   }, [customerAssignments, searchTerm, dateRange]); // Dependencies tetap sama
   // --- AKHIR FILTER HISTORY ---
 
-  // Export CSV (logika tetap sama, menggunakan filteredCustomers)
+  // --- PERUBAHAN: Fungsi Ekspor CSV Diperbarui ---
   const exportToExcel = () => {
     const data = filteredCustomers.flatMap(([customer, assignments]) =>
       assignments.map((assignment) => ({
         Customer: customer,
         Email: assignment.accountEmail,
-        Type: assignment.accountType, // Pastikan ini string
+        Password: assignment.account?.password || "N/A",
+        Platform: assignment.account?.platform || "N/A",
+        Type: assignment.accountType,
         Profile: assignment.profileName,
+        "Nama WA": assignment.whatsappAccount?.name || "N/A", // <-- Kolom Baru
+        "No WA": assignment.whatsappAccount?.number || "N/A", // <-- Kolom Baru
         Operator: assignment.operatorName || "Unknown",
         Date: new Date(assignment.assignedAt).toLocaleDateString("id-ID", {
           day: "numeric",
@@ -115,23 +119,30 @@ export default function CustomerStatistics() {
         }),
       }))
     );
+
+    // --- PERUBAHAN: Headers diupdate ---
     const headers = [
       "Customer",
       "Email",
+      "Password",
+      "Platform",
       "Type",
       "Profile",
+      "Nama WA", // <-- Header Baru
+      "No WA", // <-- Header Baru
       "Operator",
       "Date",
     ];
+    // --- AKHIR PERUBAHAN ---
+
     const csvContent = [
       headers.join(","),
       ...data.map((row) =>
         headers
           .map((header) => {
-            const cell = String(row[header as keyof typeof row] ?? "").replace(
-              /"/g,
-              '""'
-            );
+            // Mengambil nilai sel, handle jika key tidak ada di row
+            const cellValue = row[header as keyof typeof row] ?? "";
+            const cell = String(cellValue).replace(/"/g, '""');
             return `"${cell}"`;
           })
           .join(",")
@@ -158,6 +169,7 @@ export default function CustomerStatistics() {
       description: "Customer data has been exported to CSV",
     });
   };
+  // --- AKHIR PERUBAHAN ---
 
   const clearFilters = () => {
     setSearchTerm("");

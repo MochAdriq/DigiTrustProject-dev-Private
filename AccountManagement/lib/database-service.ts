@@ -6,6 +6,7 @@ import {
   Account,
   AccountType as PrismaAccountType,
   PlatformType as PrismaPlatformType, // Kita gunakan ini
+  WhatsappAccount, // <-- TAMBAHKAN TIPE INI
 } from "@prisma/client";
 // Impor generateProfiles dari utils
 import { generateProfiles } from "./utils";
@@ -504,6 +505,48 @@ export class DatabaseService {
     });
   }
 
+  // --- TAMBAHAN BARU ---
+  // ===========================
+  // 隼 WHATSAPP ACCOUNT CRUD
+  // ===========================
+  static async getAllWhatsappAccounts(): Promise<WhatsappAccount[]> {
+    return prisma.whatsappAccount.findMany({
+      orderBy: { name: "asc" },
+    });
+  }
+
+  static async createWhatsappAccount(data: {
+    name: string;
+    number: string;
+  }): Promise<WhatsappAccount> {
+    if (!data.name || !data.number) {
+      throw new Error("Name and number are required.");
+    }
+    return prisma.whatsappAccount.create({ data });
+  }
+
+  static async updateWhatsappAccount(
+    id: string,
+    data: { name?: string; number?: string }
+  ): Promise<WhatsappAccount> {
+    if (!id) throw new Error("ID is required for update.");
+    if (!data.name && !data.number) {
+      throw new Error("No data provided for update.");
+    }
+    return prisma.whatsappAccount.update({
+      where: { id },
+      data,
+    });
+  }
+
+  static async deleteWhatsappAccount(id: string): Promise<WhatsappAccount> {
+    if (!id) throw new Error("ID is required for deletion.");
+    // Opsional: Cek dulu apakah WA ini dipakai di CustomerAssignment
+    // Jika iya, mungkin lebih baik jangan dihapus (atau set null)
+    return prisma.whatsappAccount.delete({ where: { id } });
+  }
+  // --- AKHIR TAMBAHAN BARU ---
+
   // ===========================
   // 隼 CUSTOMER ASSIGNMENTS
   // ===========================
@@ -511,7 +554,14 @@ export class DatabaseService {
     return prisma.customerAssignment.findMany({
       orderBy: { assignedAt: "desc" },
       include: {
-        account: { select: { id: true, platform: true, expiresAt: true } },
+        account: {
+          select: { id: true, platform: true, expiresAt: true, password: true },
+        },
+        // --- PERUBAHAN DI SINI ---
+        whatsappAccount: {
+          select: { name: true, number: true },
+        },
+        // --- AKHIR PERUBAHAN ---
       },
     });
   }
@@ -519,6 +569,8 @@ export class DatabaseService {
   // Fungsi addCustomerAssignment dengan logika random profile & perbaikan type guard
   static async addCustomerAssignment(data: {
     customerIdentifier: string;
+    // customerWhatsapp?: string; // <-- DIHAPUS
+    whatsappAccountId?: string; // <-- DIGANTI
     accountId: string;
     accountEmail: string;
     accountType: AccountType;
@@ -588,6 +640,8 @@ export class DatabaseService {
       const assignment = await tx.customerAssignment.create({
         data: {
           customerIdentifier: data.customerIdentifier,
+          // customerWhatsapp: data.customerWhatsapp, // <-- DIHAPUS
+          whatsappAccountId: data.whatsappAccountId, // <-- DIGANTI
           accountId: data.accountId,
           accountEmail: data.accountEmail,
           accountType: data.accountType as PrismaAccountType,

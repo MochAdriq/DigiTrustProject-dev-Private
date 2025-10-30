@@ -20,12 +20,19 @@ import type {
   CustomerAssignment,
   OperatorActivity,
   PlatformType as PrismaPlatformType, // Gunakan alias agar jelas
+  WhatsappAccount, // <-- Tipe baru diimpor
 } from "@prisma/client";
 
 // Tipe Data Laporan (dengan detail Akun)
 type ReportedAccountWithAccount = ReportedAccount & {
   account: Pick<Account, "id" | "email" | "type" | "platform"> | null;
   operatorName?: string | null;
+};
+
+// Tipe ini menggabungkan CustomerAssignment dengan relasi 'account' dan 'whatsappAccount'
+type CustomerAssignmentWithAccount = CustomerAssignment & {
+  account: Pick<Account, "id" | "platform" | "expiresAt" | "password"> | null;
+  whatsappAccount: Pick<WhatsappAccount, "name" | "number"> | null; // <-- Relasi baru
 };
 
 // Tipe Data Statistik (sesuai API)
@@ -45,9 +52,10 @@ export interface OperatorStats {
 }
 export type OperatorStatisticsData = Record<string, OperatorStats>;
 
-// Tipe Payload Assignment (di-export) - Sudah benar (tanpa profileName)
+// Tipe Payload Assignment (di-export)
 export type AddCustomerAssignmentPayload = {
   customerIdentifier: string;
+  whatsappAccountId?: string; // <-- Sesuai skema baru
   accountId: string;
   accountEmail: string;
   accountType: AccountType;
@@ -77,15 +85,21 @@ type BulkAddAccountsPayload = {
   }[];
   expiresAt: string;
 };
+// Payload untuk CRUD WA (baru)
+export type WhatsappAccountPayload = {
+  name: string;
+  number: string;
+};
 
-// Interface/Tipe untuk Context Provider - Sudah benar
+// Interface/Tipe untuk Context Provider
 interface AccountContextType {
   // States
   accounts: Account[];
   garansiAccounts: GaransiAccount[];
   reportedAccounts: ReportedAccountWithAccount[];
-  customerAssignments: CustomerAssignment[];
+  customerAssignments: CustomerAssignmentWithAccount[];
   operatorActivities: OperatorActivity[];
+  whatsappAccounts: WhatsappAccount[];
   isLoading: boolean;
   availableProfileCounts: { private: number; sharing: number; vip: number };
   customerStatistics: CustomerStatisticsData | null;
@@ -129,6 +143,14 @@ interface AccountContextType {
     platform: PrismaPlatformType,
     type: AccountType
   ) => Promise<Account[]>;
+  addWhatsappAccount: (
+    payload: WhatsappAccountPayload
+  ) => Promise<WhatsappAccount | null>;
+  updateWhatsappAccount: (
+    id: string,
+    payload: Partial<WhatsappAccountPayload>
+  ) => Promise<WhatsappAccount | null>;
+  deleteWhatsappAccount: (id: string) => Promise<boolean>;
 
   // Getters (Sync - Baca State Client)
   getAccountsByType: (type: AccountType) => Account[];
@@ -218,7 +240,6 @@ async function fetchFromAPI(endpoint: string, options?: RequestInit) {
 
 // Provider Komponen
 export function AccountProvider({ children }: { children: ReactNode }) {
-  // <-- Pastikan kurung kurawal benar
   const { toast } = useToast();
 
   // --- States ---
@@ -229,11 +250,14 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     ReportedAccountWithAccount[]
   >([]);
   const [customerAssignments, setCustomerAssignments] = useState<
-    CustomerAssignment[]
+    CustomerAssignmentWithAccount[]
   >([]);
   const [operatorActivities, setOperatorActivities] = useState<
     OperatorActivity[]
   >([]);
+  const [whatsappAccounts, setWhatsappAccounts] = useState<WhatsappAccount[]>(
+    []
+  );
   const [availableProfileCounts, setAvailableProfileCounts] = useState<{
     private: number;
     sharing: number;
@@ -246,7 +270,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
   // --- Fungsi Refresh Data ---
   const refreshData = useCallback(async () => {
-    setIsLoading(true);
+    // setIsLoading(true); // Hindari set loading true di sini jika dipanggil dari action lain
     console.log("🔄 Refreshing all data...");
     try {
       const [
@@ -255,6 +279,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         rData,
         cData,
         oData,
+        waData,
         pCount,
         sCount,
         vCount,
@@ -281,6 +306,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           console.error("Failed activities fetch:", e);
           return [];
         }),
+        fetchFromAPI("/api/whatsapp-accounts").catch((e) => {
+          console.error("Failed whatsapp accounts fetch:", e);
+          return [];
+        }),
         fetchFromAPI("/api/statistics/profiles/private").catch((e) => {
           console.error("Failed private count fetch:", e);
           return { count: 0 };
@@ -305,8 +334,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       setAccounts(Array.isArray(aData) ? aData : []);
       setGaransiAccounts(Array.isArray(gData) ? gData : []);
       setReportedAccounts(Array.isArray(rData) ? rData : []);
+      console.log("DEBUG: Isi cData dari API:", cData);
       setCustomerAssignments(Array.isArray(cData) ? cData : []);
       setOperatorActivities(Array.isArray(oData) ? oData : []);
+      setWhatsappAccounts(Array.isArray(waData) ? waData : []);
       setAvailableProfileCounts({
         private: (pCount as { count: number })?.count ?? 0,
         sharing: (sCount as { count: number })?.count ?? 0,
@@ -326,19 +357,26 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      // Hanya set isLoading false jika ini adalah panggilan refresh awal
+      if (isLoading) setIsLoading(false);
       console.log("🏁 Refresh complete.");
     }
-  }, [toast]); // <-- Pastikan dependency useCallback benar
+  }, [toast, isLoading]); // Tambahkan isLoading agar bisa cek panggilan awal
 
   // useEffects
   useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+    // Panggil refreshData saat komponen pertama kali mount
+    if (isLoading) {
+      // Panggil hanya jika isLoading masih true (awal)
+      refreshData();
+    }
+  }, [refreshData, isLoading]); // Tambahkan isLoading di dependency
+
   useEffect(() => {
+    // Interval refresh tetap jalan seperti biasa
     const i = setInterval(() => {
       if (!isLoading) refreshData();
-    }, 300000);
+    }, 300000); // 5 menit
     return () => clearInterval(i);
   }, [isLoading, refreshData]);
 
@@ -368,7 +406,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       }
     },
     [refreshData, toast]
-  ); // <-- Tambah useCallback & dependencies
+  );
 
   const addAccounts = useCallback(
     async (
@@ -382,6 +420,13 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify(payload),
         });
         await refreshData();
+        // Tampilkan toast sukses untuk bulk import
+        toast({
+          title: "✅ Bulk Import Selesai",
+          description: `${
+            result?.processedCount ?? 0
+          } akun baru berhasil ditambahkan.`,
+        });
         return result as { processedCount?: number } | null;
       } catch (error: any) {
         toast({
@@ -389,11 +434,11 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           description: error.message || "Error.",
           variant: "destructive",
         });
-        throw error;
+        throw error; // Tetap lempar error agar bisa ditangani di komponen jika perlu
       }
     },
     [refreshData, toast]
-  ); // <-- Tambah useCallback & dependencies
+  );
 
   const updateAccount = useCallback(
     async (
@@ -418,7 +463,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       }
     },
     [refreshData, toast]
-  ); // <-- Tambah useCallback & dependencies
+  );
 
   const deleteAccount = useCallback(
     async (id: string): Promise<boolean> => {
@@ -437,7 +482,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       }
     },
     [refreshData, toast]
-  ); // <-- Tambah useCallback & dependencies
+  );
 
   const searchAccountsByEmail = useCallback(
     async (emailQuery: string): Promise<Account[]> => {
@@ -456,7 +501,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       }
     },
     [toast]
-  ); // <-- Tambah useCallback & dependencies
+  );
 
   // Akun Garansi
   const addGaransiAccounts = useCallback(
@@ -486,7 +531,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       }
     },
     [refreshData, toast]
-  ); // <-- Tambah useCallback & dependencies
+  );
 
   const getGaransiAccountsByDate = useCallback(
     async (date: string): Promise<GaransiAccount[]> => {
@@ -503,7 +548,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       }
     },
     [toast]
-  ); // <-- Tidak perlu refreshData
+  );
 
   const getGaransiAccountsByExpiresAt = useCallback(
     async (date: string): Promise<GaransiAccount[]> => {
@@ -520,7 +565,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       }
     },
     [toast]
-  ); // <-- Tidak perlu refreshData
+  );
 
   // Report & Resolve
   const getAccountByEmail = useCallback(
@@ -531,7 +576,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       );
     },
     [accounts]
-  ); // <-- Hanya bergantung pada state 'accounts'
+  );
 
   const reportAccount = useCallback(
     async (
@@ -563,7 +608,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       }
     },
     [getAccountByEmail, refreshData, toast]
-  ); // <-- Tambah dependencies
+  );
 
   const resolveReport = useCallback(
     async (reportId: string, newPassword?: string): Promise<boolean> => {
@@ -585,9 +630,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       }
     },
     [refreshData, toast]
-  ); // <-- Tambah dependencies
+  );
 
-  // Assignment (refreshData dihapus) - Sudah benar
+  // --- PERBAIKAN REFRESH ---
+  // Assignment: Panggil refreshData setelah sukses
   const addCustomerAssignment = useCallback(
     async (
       payload: AddCustomerAssignmentPayload
@@ -597,7 +643,12 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           method: "POST",
           body: JSON.stringify(payload),
         });
-        /* await refreshData(); */ toast({ title: "✅ Assignment Berhasil" });
+
+        // --- Panggil refreshData di sini ---
+        await refreshData();
+        // --- AKHIR Panggil refreshData di sini ---
+
+        toast({ title: "✅ Assignment Berhasil" });
         return newAssignment as CustomerAssignment | null;
       } catch (e: any) {
         toast({
@@ -608,8 +659,11 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         return null;
       }
     },
-    [toast]
-  ); // <-- Hanya perlu toast
+    // --- Tambahkan refreshData di dependencies ---
+    [toast, refreshData]
+    // --- AKHIR Tambahkan refreshData di dependencies ---
+  );
+  // --- AKHIR PERBAIKAN REFRESH ---
 
   const isCustomerIdentifierUsed = useCallback(
     async (identifier: string): Promise<boolean> => {
@@ -626,9 +680,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       }
     },
     []
-  ); // <-- Tidak ada dependencies
+  );
 
-  // Ambil Akun Tersedia (Sudah dibungkus useCallback) - Sudah benar
   const getAvailableAccounts = useCallback(
     async (
       platform: PrismaPlatformType,
@@ -652,7 +705,86 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     [toast]
   );
 
-  // --- Getters --- (Dibungkus useCallback untuk stabilitas referensi)
+  // --- Implementasi fungsi CRUD WA ---
+  // --- WHATSAPP ACCOUNTS ---
+  const addWhatsappAccount = useCallback(
+    async (
+      payload: WhatsappAccountPayload
+    ): Promise<WhatsappAccount | null> => {
+      try {
+        const newWa = await fetchFromAPI("/api/whatsapp-accounts", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        await refreshData(); // Refresh semua data agar state terupdate
+        toast({
+          title: "✅ Akun WA Ditambahkan",
+          description: `${payload.name} berhasil.`,
+        });
+        return newWa as WhatsappAccount | null;
+      } catch (e: any) {
+        toast({
+          title: "❌ Gagal Tambah Akun WA",
+          description: e.message || "Error.",
+          variant: "destructive",
+        });
+        return null;
+      }
+    },
+    [refreshData, toast]
+  );
+
+  const updateWhatsappAccount = useCallback(
+    async (
+      id: string,
+      payload: Partial<WhatsappAccountPayload>
+    ): Promise<WhatsappAccount | null> => {
+      try {
+        const updatedWa = await fetchFromAPI(`/api/whatsapp-accounts/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+        await refreshData(); // Refresh semua data
+        toast({
+          title: "✅ Akun WA Diupdate",
+          description: `${payload.name || ""} berhasil diupdate.`,
+        });
+        return updatedWa as WhatsappAccount | null;
+      } catch (e: any) {
+        toast({
+          title: "❌ Gagal Update Akun WA",
+          description: e.message || "Error.",
+          variant: "destructive",
+        });
+        return null;
+      }
+    },
+    [refreshData, toast]
+  );
+
+  const deleteWhatsappAccount = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        await fetchFromAPI(`/api/whatsapp-accounts/${id}`, {
+          method: "DELETE",
+        });
+        await refreshData(); // Refresh semua data
+        toast({ title: "✅ Akun WA Dihapus" });
+        return true;
+      } catch (e: any) {
+        toast({
+          title: "❌ Gagal Hapus Akun WA",
+          description: e.message || "Error.",
+          variant: "destructive",
+        });
+        return false;
+      }
+    },
+    [refreshData, toast]
+  );
+  // --- AKHIR Implementasi fungsi CRUD WA ---
+
+  // --- Getters ---
   const getCustomerStatistics = useCallback(
     (): CustomerStatisticsData | null => customerStatistics,
     [customerStatistics]
@@ -693,12 +825,12 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   // --- Provider Value ---
   const contextValue = useMemo(
     () => ({
-      // Bungkus value dengan useMemo
       accounts,
       garansiAccounts,
       reportedAccounts,
       customerAssignments,
       operatorActivities,
+      whatsappAccounts,
       isLoading,
       availableProfileCounts,
       customerStatistics,
@@ -717,6 +849,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       addCustomerAssignment,
       isCustomerIdentifierUsed,
       getAvailableAccounts,
+      addWhatsappAccount,
+      updateWhatsappAccount,
+      deleteWhatsappAccount,
       getRemainingDays,
       getAccountsByType,
       getAccountByEmail,
@@ -731,6 +866,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       reportedAccounts,
       customerAssignments,
       operatorActivities,
+      whatsappAccounts,
       isLoading,
       availableProfileCounts,
       customerStatistics,
@@ -749,6 +885,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       addCustomerAssignment,
       isCustomerIdentifierUsed,
       getAvailableAccounts,
+      addWhatsappAccount,
+      updateWhatsappAccount,
+      deleteWhatsappAccount,
       getRemainingDays,
       getAccountsByType,
       getAccountByEmail,
@@ -757,16 +896,16 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       getCustomerStatistics,
       getOperatorStatistics,
     ]
-  ); // Masukkan semua state dan fungsi ke dependency array useMemo
+  );
 
   return (
     <AccountContext.Provider value={contextValue}>
       {children}
     </AccountContext.Provider>
   );
-} // <-- Pastikan kurung kurawal ini ada dan benar
+}
 
-// Hook useAccounts (Sudah benar)
+// Hook useAccounts
 export function useAccounts(): AccountContextType {
   const context = useContext(AccountContext);
   if (context === undefined) {

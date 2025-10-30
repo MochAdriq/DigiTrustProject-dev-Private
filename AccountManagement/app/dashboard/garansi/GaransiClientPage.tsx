@@ -209,7 +209,7 @@ function GaransiView() {
           <div className="space-y-6 mb-6">
             <div className="space-y-3">
               <Label className="text-base font-semibold text-gray-700">
-                1. Pilih Tipe Pencarian
+                Pilih Tipe Pencarian
               </Label>
               <div className="flex gap-4">
                 <Button
@@ -268,7 +268,7 @@ function GaransiView() {
             </div>
             <div className="space-y-3">
               <Label className="text-base font-semibold text-gray-700">
-                2. Pilih Tanggal (Filter)
+                Pilih Tanggal (Filter)
               </Label>
               <Popover>
                 <PopoverTrigger asChild>
