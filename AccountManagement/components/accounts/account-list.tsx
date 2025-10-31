@@ -109,7 +109,7 @@ export default function AccountList({ type }: AccountListProps) {
   const filteredAccounts = getAccountsByType(type); // Ambil data dulu
 
   const sortedAccounts = [...filteredAccounts].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 
   const confirmDelete = useCallback(async () => {
@@ -218,7 +218,7 @@ export default function AccountList({ type }: AccountListProps) {
                         profileDisplay = "Error"; // Tampilkan error jika JSON tidak valid
                       }
                     } else if (Array.isArray(account.profiles)) {
-                      profilesArray = account.profiles;
+                      profilesArray = account.profiles as unknown as Profile[];
                     }
 
                     if (Array.isArray(profilesArray)) {

@@ -170,37 +170,42 @@ export default function DashboardTabs() {
                     <ReportedAccounts />
                   </DialogContent>
                 </Dialog>
-                {/* Tombol Backup */}
-                <Dialog open={isBackupOpen} onOpenChange={setIsBackupOpen}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <DialogTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="text-green-600 border-green-300 hover:bg-green-600 hover:text-white"
-                        >
-                          <HardDrive className="h-4 w-4" />
-                        </Button>
-                      </DialogTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Backup & Restore Data</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>💾 Offline Backup & Import</DialogTitle>
-                    </DialogHeader>
-                    <OfflineBackup />
-                  </DialogContent>
-                </Dialog>
+
+                {/* // <-- PERBAIKAN: Tombol Backup dipindahkan dari sini
+                 */}
               </div>
               {/* Separator & Admin Buttons */}
               {isAdmin && ( // Hanya tampilkan jika admin
                 <>
                   <div className="h-6 w-px bg-gray-300"></div>
                   <div className="flex items-center space-x-2">
+                    {/* <-- PERBAIKAN: Tombol Backup dipindah ke sini --> */}
+                    <Dialog open={isBackupOpen} onOpenChange={setIsBackupOpen}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="text-green-600 border-green-300 hover:bg-green-600 hover:text-white"
+                            >
+                              <HardDrive className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Backup & Restore Data</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>💾 Offline Backup & Import</DialogTitle>
+                        </DialogHeader>
+                        <OfflineBackup />
+                      </DialogContent>
+                    </Dialog>
+                    {/* <-- AKHIR PERBAIKAN --> */}
+
                     {/* Tombol Statistik */}
                     <Dialog open={isStatsOpen} onOpenChange={setIsStatsOpen}>
                       <Tooltip>
@@ -407,28 +412,33 @@ export default function DashboardTabs() {
                   </Dialog>
                 </div>
               )}
-              {/* Tombol Request Account */}
-              <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DialogTrigger asChild>
-                      <Button className="bg-green-600 hover:bg-green-700 text-white font-bold">
-                        <ShoppingCart className="w-4 h-4 mr-2" />
-                        Request Account
-                      </Button>
-                    </DialogTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Buka form request akun.</p>
-                  </TooltipContent>
-                </Tooltip>
-                <DialogContent className="max-w-7xl">
-                  <DialogHeader>
-                    <DialogTitle>Request New Account</DialogTitle>
-                  </DialogHeader>
-                  <RequestAccount />
-                </DialogContent>
-              </Dialog>
+
+              {/* <-- PERBAIKAN: Tombol Request Account HANYA untuk Operator --> */}
+              {!isAdmin && (
+                <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DialogTrigger asChild>
+                        <Button className="bg-green-600 hover:bg-green-700 text-white font-bold">
+                          <ShoppingCart className="w-4 h-4 mr-2" />
+                          Request Account
+                        </Button>
+                      </DialogTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Buka form request akun.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <DialogContent className="max-w-7xl">
+                    <DialogHeader>
+                      <DialogTitle>Request New Account</DialogTitle>
+                    </DialogHeader>
+                    <RequestAccount />
+                  </DialogContent>
+                </Dialog>
+              )}
+              {/* <-- AKHIR PERBAIKAN --> */}
+
               {/* Tombol Refresh */}
               <Tooltip>
                 <TooltipTrigger asChild>

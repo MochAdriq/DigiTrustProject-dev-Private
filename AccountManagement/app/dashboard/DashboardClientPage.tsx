@@ -13,7 +13,7 @@ export default function DashboardClientPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPlatform, setSelectedPlatform] = useState<string>(
-    PLATFORM_LIST[0]
+    PLATFORM_LIST[0].key
   );
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export default function DashboardClientPage() {
           style={{ animationDelay: "3s" }}
         ></div>
 
-        <DashboardHeader title="Dashboard" subtitle="Account Management" />
+        <DashboardHeader />
         <main className="container mx-auto py-8 px-4 relative z-10">
           <div className="mb-8 text-center">
             <h1 className="text-4xl font-bold gradient-text mb-2">
