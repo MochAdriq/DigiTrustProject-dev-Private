@@ -1,15 +1,11 @@
-// prisma/seed.ts
-
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log(`🌱 Start seeding ...`);
 
-  // ==========================
-  // 1. Seed Users
-  // ==========================
+  // --- Seed Users ---
   console.log(`👤 Seeding users...`);
 
   await prisma.user.upsert({
@@ -18,7 +14,7 @@ async function main() {
     create: {
       username: "admin",
       name: "Administrator Utama",
-      password: "TrustDigital2024!", // Pastikan ini di-hash jika Anda memiliki logic hashing
+      password: "TrustDigital2024!", // TODO: hash di production
       role: "admin",
     },
   });
@@ -29,28 +25,19 @@ async function main() {
     create: {
       username: "operator1",
       name: "Operator Satu",
-      password: "Operator123!", // Pastikan ini di-hash jika Anda memiliki logic hashing
+      password: "Operator123!", // TODO: hash di production
       role: "operator",
     },
   });
 
-  console.log(`👤 Users seeded: admin, operator1`);
-  console.log(`✅ Seeding finished.`);
+  console.log(`✅ Users seeded: admin, operator1`);
 }
 
 main()
   .catch((e) => {
-    console.error("❌ Error during seeding:", e);
-    if (e instanceof Prisma.PrismaClientKnownRequestError) {
-      console.error("Prisma Error Code:", e.code);
-      console.error("Prisma Error Meta:", e.meta);
-    }
-    if (e instanceof Prisma.PrismaClientValidationError) {
-      console.error("Prisma Validation Error:", e.message);
-    }
+    console.error(e);
     process.exit(1);
   })
   .finally(async () => {
-    console.log("🔌 Disconnecting Prisma Client...");
     await prisma.$disconnect();
   });
