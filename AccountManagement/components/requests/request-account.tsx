@@ -473,7 +473,7 @@ export default function RequestAccount() {
             {/* 1. Tipe Akun */}
             <div className="space-y-2">
               <Label htmlFor="account-type" className="font-semibold">
-                1. Tipe Akun
+                Pilih Tipe Akun
               </Label>
               <Select
                 value={accountType}
@@ -496,7 +496,7 @@ export default function RequestAccount() {
             {/* 2. Platform */}
             <div className="space-y-2">
               <Label htmlFor="platform-select" className="font-semibold">
-                2. Platform
+                Pilih Platform
               </Label>
               <Select
                 value={selectedPlatform}
@@ -521,7 +521,7 @@ export default function RequestAccount() {
             {/* 3. Customer Info */}
             <div className="space-y-2">
               <Label htmlFor="customer-identifier" className="font-semibold">
-                3. Info Customer (Nama / ID)
+                Info Customer (Nama / No.Hp)
               </Label>
               <div className="relative">
                 <Input
@@ -529,7 +529,7 @@ export default function RequestAccount() {
                   type="text"
                   value={customerIdentifier}
                   onChange={(e) => setCustomerIdentifier(e.target.value)}
-                  placeholder="Nama Customer"
+                  placeholder="Nama Customer/No.Hp"
                   className={`h-11 pr-10 ${
                     customerError
                       ? "border-red-500 focus-visible:ring-red-500"
@@ -554,7 +554,7 @@ export default function RequestAccount() {
             {/* --- PERUBAHAN: Input Teks diganti Dropdown --- */}
             <div className="space-y-2">
               <Label htmlFor="wa-select" className="font-semibold">
-                4. Pilih WA Operator
+                Pilih WA Operator
               </Label>
               <Select
                 value={selectedWaId}
@@ -587,7 +587,7 @@ export default function RequestAccount() {
             {selectedPlatform && accountType && (
               <div className="space-y-3 border rounded-md p-4 bg-gray-50">
                 <Label className="font-semibold block mb-2">
-                  5. Pilih Akun Tersedia
+                  Pilih Akun Tersedia
                 </Label>
                 {isFetchingAccounts ? (
                   <div className="flex items-center justify-center h-20 text-gray-500">
@@ -692,7 +692,7 @@ export default function RequestAccount() {
                 <h3 className="font-semibold text-lg text-center text-green-700">
                   ✅ Berhasil Ditugaskan!
                 </h3>
-                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md font-mono text-xs whitespace-pre-wrap border border-gray-200 dark:border-gray-700 max-h-96 overflow-y-auto">
+                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md font-mono text-xs whitespace-pre-wrap border border-gray-200 dark:border-gray-700 max-h-1000 overflow-y-auto">
                   {/* Template Teks Hasil Assignment */}
                   {`!!! ${getPlatformDisplayName(
                     assignmentResult.platform
@@ -709,7 +709,7 @@ export default function RequestAccount() {
                     // --- PERUBAHAN: Template Teks dirombak ---
                     assignmentResult.whatsappAccountName &&
                     assignmentResult.whatsappAccountName !== "N/A"
-                      ? `\n📞 WA Operator: ${assignmentResult.whatsappAccountName} (${assignmentResult.whatsappAccountNum})`
+                      ? `\n📞 WA Operator: ${assignmentResult.whatsappAccountName}` // Nomor WA telah dihapus dari sini
                       : ""
                     // --- AKHIR PERUBAHAN ---
                   }\n👨‍💼 Operator: ${
