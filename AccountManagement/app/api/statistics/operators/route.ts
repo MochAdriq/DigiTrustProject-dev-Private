@@ -2,6 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { DatabaseService } from "@/lib/database-service";
+export const dynamic = "force-dynamic";
 
 /**
  * --------------------------------------------------------------------------------

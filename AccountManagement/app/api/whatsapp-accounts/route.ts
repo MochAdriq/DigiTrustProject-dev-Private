@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { DatabaseService } from "@/lib/database-service";
+export const dynamic = "force-dynamic";
 
 /**
  * Handler GET: Mengambil semua akun WhatsApp

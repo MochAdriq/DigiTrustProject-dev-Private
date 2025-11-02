@@ -7,6 +7,7 @@ import { DatabaseService } from "@/lib/database-service"; // Impor service saja
 // Impor Prisma untuk error handling dan PlatformType
 import { Prisma, PlatformType as PrismaPlatformType } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
 export const runtime = "nodejs"; // Prisma needs Node.js
 
 // --- PATCH: Update Akun Berdasarkan ID ---

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma"; // Impor prisma client
 import { Prisma } from "@prisma/client"; // Impor Prisma untuk tipe dan error
 
+export const dynamic = "force-dynamic";
 // Impor tipe data backup jika ada (atau definisikan di sini)
 interface BackupDataPayload {
   accounts: any[];
