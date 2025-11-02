@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { DatabaseService } from "@/lib/database-service";
 
 export const runtime = "nodejs"; // Prisma needs Node.js
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {

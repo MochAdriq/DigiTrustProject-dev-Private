@@ -12,6 +12,9 @@ import { DatabaseService } from "@/lib/database-service";
  * @param { params: { identifier: string } } - Customer identifier (nomor HP/nama).
  * @returns { NextResponse<{ used: boolean }> } - Status penggunaan identifier.
  */
+
+export const dynamic = "force-dynamic";
+
 export async function GET(
   request: Request,
   { params }: { params: { identifier: string } }

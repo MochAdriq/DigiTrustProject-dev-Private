@@ -13,6 +13,9 @@ import { DatabaseService, AccountType } from "@/lib/database-service";
  * @param { params: { type: AccountType } } - Tipe akun ('private', 'sharing', 'vip').
  * @returns { NextResponse<{ count: number }> } - Jumlah profil tersedia atau error.
  */
+
+export const dynamic = "force-dynamic";
+
 export async function GET(
   request: Request,
   { params }: { params: { type: AccountType } } // Gunakan tipe AccountType

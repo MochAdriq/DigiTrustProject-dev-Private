@@ -9,6 +9,8 @@ import { PlatformType as PrismaPlatformType } from "@prisma/client";
 
 export const runtime = "nodejs";
 
+export const dynamic = "force-dynamic";
+
 // Tipe data input untuk satu akun garansi (gunakan tipe Prisma)
 interface GaransiAccountInput {
   email: string;

@@ -9,6 +9,8 @@ import { PlatformType as PrismaPlatformType } from "@prisma/client";
 
 export const runtime = "nodejs"; // Prisma needs Node.js
 
+export const dynamic = "force-dynamic";
+
 // --- GET: Ambil Akun (dengan filter opsional) ---
 export async function GET(req: NextRequest) {
   try {
