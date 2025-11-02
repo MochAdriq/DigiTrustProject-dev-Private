@@ -1,6 +1,12 @@
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.POSTGRES_URL_NON_POOLING,
+    },
+  },
+});
 
 async function main() {
   console.log(`🌱 Start seeding ...`);
