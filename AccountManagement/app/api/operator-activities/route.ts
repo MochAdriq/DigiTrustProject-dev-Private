@@ -10,6 +10,9 @@ import { DatabaseService } from "@/lib/database-service";
  * Endpoint untuk mengambil SEMUA log aktivitas operator dari database.
  * Diurutkan berdasarkan tanggal terbaru.
  */
+
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   try {
     console.log("[API] Fetching all operator activities...");

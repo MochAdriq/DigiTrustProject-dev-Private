@@ -9,7 +9,8 @@
     "start": "next start",
     "db:push": "dotenv -e .env -- prisma db push",
     "db:seed": "dotenv -e .env -- prisma db seed",
-    "db:studio": "dotenv -e .env -- prisma studio"
+    "db:studio": "dotenv -e .env -- prisma studio",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
